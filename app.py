@@ -45,9 +45,14 @@ def check_password():
 # 1. API 키 설정
 # ==========================================
 # 👇 여기에 발급받으신 Google Gemini API 키를 넣어주세요.
-API_KEY = "AIzaSyD0AaiSi7JfcjGc6Q9_KnzXplQwtFnc8V4"
-genai.configure(api_key=API_KEY)
+# 키는 Secrets에서 가져옴
+import os
+if "GOOGLE_API_KEY" in st.secrets:
+    API_KEY = st.secrets["GOOGLE_API_KEY"]
+else:
+    API_KEY = os.environ.get("GOOGLE_API_KEY")
 
+genai.configure(api_key=API_KEY)
 # ==========================================
 # 2. 모델 설정
 # ==========================================
@@ -224,4 +229,5 @@ def main():
 # ==========================================
 if __name__ == "__main__":
     if check_password():
+
         main()
