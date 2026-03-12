@@ -183,24 +183,25 @@ def main():
     else:
         st.error("⚠️ 폴더에 PDF 법령 파일이 없습니다. (같은 폴더에 넣어주세요)")
     
-    # xlsx, csv (엑셀) 확장자 지원
-    uploaded_files = st.file_uploader("파일 업로드 (시안, 시험성적서, 배합비 등)", type=["jpg", "png", "jpeg", "pdf", "xlsx", "csv"], accept_multiple_files=True)
+    # 👇 안정성을 위해 엑셀은 빼고, 안내 문구를 강화했습니다.
+    st.info("💡 **[필독]** 엑셀(.xlsx)이나 한글(.hwp) 형식의 배합비/성적서는 표 구조 인식을 위해 반드시 **PDF로 저장(변환)** 후 업로드해 주세요.")
+    uploaded_files = st.file_uploader("파일 업로드 (시안 및 PDF 변환된 성적서/배합비)", type=["jpg", "png", "jpeg", "pdf"], accept_multiple_files=True)
 
     if uploaded_files:
         user_content = []
-        st.write(f"📂 총 {len(uploaded_files)}개의 파일이 인식되었습니다. (한글 .hwp 파일은 PDF로 변환 후 올려주세요)")
+        st.write(f"📂 총 {len(uploaded_files)}개의 파일이 인식되었습니다.")
         
         for uploaded_file in uploaded_files:
             file_ext = uploaded_file.name.split('.')[-1].lower()
             
-            # 이미지와 문서(PDF, 엑셀) 분리 처리
+            # 이미지와 PDF 분리 처리
             if file_ext in ['jpg', 'jpeg', 'png']:
                 image = Image.open(uploaded_file)
                 st.image(image, caption=f"{uploaded_file.name}", width=200)
                 user_content.append(image)
                 
-            else:
-                # PDF, 엑셀(XLSX, CSV) 등 문서 파일 처리
+            elif file_ext == 'pdf':
+                # PDF 문서 파일 처리
                 temp_filename = f"temp_{uploaded_file.name}"
                 with open(temp_filename, "wb") as f:
                     f.write(uploaded_file.getbuffer())
@@ -231,7 +232,7 @@ def main():
                     st.markdown("---")
                     st.markdown(response.text)
                     
-                    # 엑셀 및 PDF 등 모든 임시 파일 삭제
+                    # 찌꺼기 파일 삭제
                     for f in glob.glob("temp_*"):
                         try: os.remove(f)
                         except: pass
