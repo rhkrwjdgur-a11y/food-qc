@@ -36,7 +36,7 @@ genai.configure(api_key=API_KEY)
 MODEL_NAME = "gemini-2.5-flash"
 
 # ==========================================
-# 2. 통합 전문가 프롬프트 (Rule 1~25 완결판)
+# 2. 통합 전문가 프롬프트 (Rule 1~31 완결판)
 # ==========================================
 SYSTEM_PROMPT = """
 당신은 대한민국 최고의 '식품 표시사항 법규 및 품질관리(QC) 전문가'입니다.
@@ -47,9 +47,9 @@ SYSTEM_PROMPT = """
 - 업로드되지 않은 자료를 지어내어(환각) 평가하지 마십시오.
 
 ---
-# [식품 패키지 표시사항 QC 자동화 검수 시스템 룰북 3.0]
+# [식품 패키지 표시사항 QC 자동화 검수 시스템 룰북 3.1]
 
-## ⚠️ 검토 대원칙: 30대 특수 지침 (절대 엄수)
+## ⚠️ 검토 대원칙: 31대 특수 지침 (절대 엄수)
 
 ✅ **Rule 1. 원산지 3순위 산정 제외 (White-list)**
    - 물, 주정, 당류, 첨가물은 3순위 카운트 제외. 남은 상위 3개만 원산지 확인.
@@ -153,10 +153,11 @@ SYSTEM_PROMPT = """
    - [1단계] 업로드된 모든 원재료 명세서, 향료 서류, 시험성적서를 샅샅이 스캔하여 해당 10종의 물질이 하위 성분이나 교차오염 주의문구(제조시설 공유 등)에 숨어 있는지 찾아내십시오.
    - [2단계] 하나라도 발견되었다면, 시안의 정보표시면(뒷면) '알레르기 표시란'에 해당 물질이 정확히 기재되어 있는지 대조하십시오.
    - [3단계] 서류에는 존재하나 시안에 누락되었다면 즉시 🚨부적합 처리하고, "원재료 서류(OOO)에서 발견된 [알레르기 물질명]이 시안의 알레르기 표시란에 누락되었습니다"라고 강력히 경고하십시오.
+
+🔥 **Rule 31. [다중/무제한 성적서 처리 및 균형영양식 대응 스캔]**
+   - 균형영양식 등 다수의 영양성분(비타민, 미네랄 등) 검증을 위해 업로드되는 **'시험성적서' 및 '원료명세서'의 파일 개수나 페이지 수에 제한을 두지 마십시오.**
+   - 수십 장의 서류가 분할 업로드되더라도, 누락 없이 모든 데이터를 추출하고 병합하여 시안의 종합 영양성분표 및 원재료명과 1:1로 완벽하게 교차 검증하십시오.
 ---
-
-
-
 
 [📝 결과 보고서 5단계 작성 양식]
 ## 1️⃣ [주표시면 및 기타면]
@@ -172,7 +173,7 @@ SYSTEM_PROMPT = """
 # ==========================================
 def main():
     st.set_page_config(page_title="식품 QC 마스터", page_icon="🏭", layout="wide")
-    st.title("🏭 식품 표시사항 정밀 검토 (Rule 1~25 완결판)")
+    st.title("🏭 식품 표시사항 정밀 검토 (Rule 1~31 완결판)")
     st.markdown("---")
 
     col1, col2 = st.columns(2)
@@ -182,17 +183,22 @@ def main():
         info_img = st.file_uploader("2. 정보표시면 (뒷면)", type=["jpg", "png", "jpeg"])
         nutri_img = st.file_uploader("3. 영양성분표 (확대 컷)", type=["jpg", "png", "jpeg"])
         extra_img = st.file_uploader("4. 기타면 (측면/효능 등)", type=["jpg", "png", "jpeg"])
+        
     with col2:
-        st.subheader("📄 증빙 문서 (모두 선택사항)")
-        lab_report = st.file_uploader("5. 시험성적서", type=["pdf"])
-        recipe_doc = st.file_uploader("6. 원재료 명세서/배합비", type=["pdf", "xlsx", "csv"])
+        st.subheader("📄 증빙 문서 (모두 선택사항, 여러 개 선택 가능)")
+        # 다중 파일 업로드를 위해 accept_multiple_files=True 옵션 추가
+        lab_reports = st.file_uploader("5. 시험성적서 (여러 개 선택 가능)", type=["pdf", "jpg", "png", "jpeg"], accept_multiple_files=True)
+        recipe_docs = st.file_uploader("6. 원재료 명세서/배합비 (여러 개 선택 가능)", type=["pdf", "xlsx", "csv", "jpg", "png", "jpeg"], accept_multiple_files=True)
 
     if st.button("🔍 QC 정밀 진단 시작", type="primary"):
-        if not any([main_img, info_img, nutri_img, extra_img, lab_report, recipe_doc]):
+        # 단일 이미지 또는 다중 문서 리스트 중 하나라도 비어있지 않은지 검사
+        if not any([main_img, info_img, nutri_img, extra_img]) and not lab_reports and not recipe_docs:
             st.warning("⚠️ 검토할 자료(이미지 또는 문서)를 최소 1개 이상 업로드해주세요!")
             return
 
         user_content = []
+        
+        # 파일 업로드 처리 함수 (단일 파일 및 다중 파일 배열 지원)
         def add_file(f, label):
             if f:
                 if f.type.startswith("image"):
@@ -202,30 +208,44 @@ def main():
                     temp = f"temp_{f.name}"
                     with open(temp, "wb") as file: file.write(f.getbuffer())
                     uploaded = genai.upload_file(temp)
-                    while uploaded.state.name == "PROCESSING": time.sleep(1); uploaded = genai.get_file(uploaded.name)
+                    while uploaded.state.name == "PROCESSING": 
+                        time.sleep(1)
+                        uploaded = genai.get_file(uploaded.name)
                     user_content.append(f"<{label} 문서>")
                     user_content.append(uploaded)
 
         with st.spinner("업로드된 자료를 분석하여 맞춤형 QC를 진행합니다..."):
+            # 단일 이미지 처리
             add_file(main_img, "주표시면")
             add_file(info_img, "정보표시면")
             add_file(nutri_img, "영양성분표")
             add_file(extra_img, "기타면")
-            add_file(lab_report, "시험성적서")
-            add_file(recipe_doc, "원재료명세서")
+            
+            # 성적서 다중 파일 처리 (List 순회)
+            if lab_reports:
+                for idx, report in enumerate(lab_reports):
+                    add_file(report, f"시험성적서_{idx+1}")
+            
+            # 원재료 명세서 다중 파일 처리 (List 순회)
+            if recipe_docs:
+                for idx, recipe in enumerate(recipe_docs):
+                    add_file(recipe, f"원재료명세서_{idx+1}")
 
             model = genai.GenerativeModel(MODEL_NAME, system_instruction=SYSTEM_PROMPT)
             
             final_prompt = """
             업로드된 자료만 가지고 평가해라.
             특히 영양성분표에서 트랜스지방이 0g으로 되어있다면, 스스로 수학적 유추를 해서 합격시키지 말고 Rule 23에 따라 무조건 '0.5g 미만 표기 조건'에 대한 경고를 리포트에 출력해라.
+            또한, Rule 30에 따라 알레르기 10종(대두 등)이 서류에 있는지 철저히 스캔하고 시안 누락 여부를 알려라.
             """
             
             pdf_refs = []
             for pf in glob.glob("*.pdf"):
                 if "temp_" not in pf:
                     ref = genai.upload_file(pf)
-                    while ref.state.name == "PROCESSING": time.sleep(1); ref = genai.get_file(ref.name)
+                    while ref.state.name == "PROCESSING": 
+                        time.sleep(1)
+                        ref = genai.get_file(ref.name)
                     pdf_refs.append(ref)
 
             response = model.generate_content(pdf_refs + user_content + [final_prompt])
@@ -233,9 +253,13 @@ def main():
             st.markdown("### 📋 AI 정밀 QC 검토 리포트")
             st.markdown(response.text)
             
-            for f in glob.glob("temp_*"): os.remove(f)
+            # 임시 파일 삭제
+            for f in glob.glob("temp_*"): 
+                try:
+                    os.remove(f)
+                except:
+                    pass
 
 if __name__ == "__main__":
     if check_password():
         main()
-
