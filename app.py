@@ -193,18 +193,20 @@ def main():
     col1, col2 = st.columns(2)
     with col1:
         st.subheader("🎨 2. 시안 분할 이미지 (선택사항)")
-        main_img = st.file_uploader("주표시면 (앞면)", type=["jpg", "png", "jpeg"])
-        info_img = st.file_uploader("정보표시면 (뒷면 - 원재료/영양정보)", type=["jpg", "png", "jpeg"])
-        nutri_img = st.file_uploader("영양성분표 (확대 컷)", type=["jpg", "png", "jpeg"])
-        extra_img = st.file_uploader("기타면 (측면/효능 등)", type=["jpg", "png", "jpeg"])
+        main_img = st.file_uploader("1) 주표시면 (앞면)", type=["jpg", "png", "jpeg"])
+        info_img = st.file_uploader("2) 정보표시면 (뒷면 - 원재료/영양정보)", type=["jpg", "png", "jpeg"])
+        nutri_img = st.file_uploader("3) 영양성분표 (확대 컷)", type=["jpg", "png", "jpeg"])
+        extra_img = st.file_uploader("4) 기타면 (측면/효능 등)", type=["jpg", "png", "jpeg"])
         
     with col2:
+        # UX 개선: 혼동 방지를 위해 업로드 항목을 용도별로 3가지로 명확히 분리
         st.subheader("📄 3. 증빙 문서 (무제한 다중 업로드)")
-        lab_reports = st.file_uploader("시험성적서 (여러 개 선택 가능)", type=["pdf", "jpg", "png", "jpeg"], accept_multiple_files=True)
-        recipe_docs = st.file_uploader("원료 한글표시사항 / 가배합비 / 엑셀 (여러 개 선택 가능)", type=["pdf", "xlsx", "csv", "jpg", "png", "jpeg"], accept_multiple_files=True)
+        lab_reports = st.file_uploader("5) 시험성적서 (여러 개 선택 가능)", type=["pdf", "jpg", "png", "jpeg"], accept_multiple_files=True)
+        ingredient_specs = st.file_uploader("6) 원료별 한글표시사항 서류 (여러 개 선택 가능)", type=["pdf", "jpg", "png", "jpeg"], accept_multiple_files=True, help="각종 첨가물, 비타민믹스 등의 스펙 서류를 올려주세요.")
+        recipe_docs = st.file_uploader("7) 가배합비 / 원재료 엑셀 목록 (여러 개 선택 가능)", type=["pdf", "xlsx", "csv"], accept_multiple_files=True, help="최종 투입 배합비율이나 엑셀로 정리된 원료 리스트를 올려주세요.")
 
     if st.button("🔍 서류 추출 및 QC 정밀 진단 시작", type="primary"):
-        if not any([main_img, info_img, nutri_img, extra_img]) and not lab_reports and not recipe_docs:
+        if not any([main_img, info_img, nutri_img, extra_img]) and not lab_reports and not ingredient_specs and not recipe_docs:
             st.warning("⚠️ 검토할 자료(이미지 또는 문서)를 최소 1개 이상 업로드해주세요!")
             return
 
@@ -235,10 +237,14 @@ def main():
             if lab_reports:
                 for idx, report in enumerate(lab_reports):
                     add_file(report, f"시험성적서_{idx+1}")
+                    
+            if ingredient_specs:
+                for idx, spec in enumerate(ingredient_specs):
+                    add_file(spec, f"원료한글표시사항_{idx+1}")
             
             if recipe_docs:
                 for idx, recipe in enumerate(recipe_docs):
-                    add_file(recipe, f"원재료명세서_{idx+1}")
+                    add_file(recipe, f"가배합비_엑셀목록_{idx+1}")
 
             model = genai.GenerativeModel(MODEL_NAME, system_instruction=SYSTEM_PROMPT)
             
