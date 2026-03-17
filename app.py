@@ -36,7 +36,7 @@ genai.configure(api_key=API_KEY)
 MODEL_NAME = "gemini-2.5-flash"
 
 # ==========================================
-# 2. 통합 전문가 프롬프트 (Rule 1~34 완결판 - 데이터 출처 및 환자식 대조 로직 완벽 분리)
+# 2. 통합 전문가 프롬프트 (Rule 1~34 완결판)
 # ==========================================
 SYSTEM_PROMPT = """
 당신은 대한민국 최고의 '식품 표시사항 법규 및 품질관리(QC) 전문가'입니다.
@@ -141,7 +141,7 @@ SYSTEM_PROMPT = """
 🔥 **Rule 33. [데이터 출처 분리 및 환자식 하위성분 100% 대조 특별 룰]**
    - **[표 작성 시 출처 분리]**: 엑셀용 표를 만들 때 **'제품 내 원재료명'** 열은 오직 업로드된 **'패키지 시안'**에 적힌 텍스트를 그대로 가져와 채우십시오. 반면 나머지 열(식품유형, 원재료의 제품명, 하위성분, 원산지, 제조원)은 오직 **'원료 한글표시사항 서류(PDF/이미지 등)'**에서 추출하여 채우십시오.
    - **[대조 로직 - 일반식품]**: 시안의 대표 원재료명과 서류의 명칭이 일치하는지 확인합니다.
-   - **[대조 로직 - 환자식(특수의료용도식품)]**: 일반식품처럼 단순히 이름만 맞추는 것이 아니라, 원료 서류 상의 **'하위성분(풀전개)' 텍스트 전체**가 패키지 시안의 **'제품 내 원재료명' 괄호 안에 단 하나도 빠짐없이 완벽하게 전개되어 적혀 있는지**를 1:1로 극도로 엄격하게 대조하십시오. (예: 비타민 믹스 서류의 세부 성분 10개가 시안 괄호 안에 모두 들어있어야 일치 판정)
+   - **[대조 로직 - 환자식(특수의료용도식품)]**: 일반식품처럼 단순히 이름만 맞추는 것이 아니라, 원료 서류 상의 **'하위성분(풀전개)' 텍스트 전체**가 패키지 시안의 **'제품 내 원재료명' 괄호 안에 단 하나도 빠짐없이 완벽하게 전개되어 적혀 있는지**를 1:1로 극도로 엄격하게 대조하십시오. 
 
 🔥 **Rule 34. [2% 미만 원재료 순서 자유 배열 예외 룰]**
    - **배합비 2% 미만인 원재료들은 투입량 순서와 관계없이 마케팅 목적 등에 따라 자유롭게 배열**할 수 있습니다. 2% 미만 구간 내에서 원료들의 기재 순서가 배합비와 다르게 뒤바뀌어 있다면 이는 합법이므로 오류로 지적하지 마십시오.
@@ -239,7 +239,14 @@ def main():
 
             model = genai.GenerativeModel(MODEL_NAME, system_instruction=SYSTEM_PROMPT)
             
-            # 🔥 프롬프트에 Rule 33 데이터 출처 명확화 각인
+            # 🔥 AI 안전 필터 해제 (의학/화학 용어로 인한 ValueError 원천 차단)
+            safety_settings = [
+                {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_NONE"},
+                {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_NONE"},
+                {"category": "HARM_CATEGORY_SEXUALLY_EXPLICIT", "threshold": "BLOCK_NONE"},
+                {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_NONE"}
+            ]
+
             final_prompt = f"""
             [현재 검토 대상 제품 유형]: {product_type}
             업로드된 자료만 가지고 평가해라.
@@ -259,7 +266,10 @@ def main():
                         ref = genai.get_file(ref.name)
                     pdf_refs.append(ref)
 
-            response = model.generate_content(pdf_refs + user_content + [final_prompt])
+            response = model.generate_content(
+                pdf_refs + user_content + [final_prompt],
+                safety_settings=safety_settings  # 🔥 필터 해제 적용
+            )
             
             st.markdown("### 📋 AI 정밀 QC 검토 리포트")
             st.markdown(response.text)
