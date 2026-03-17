@@ -199,11 +199,12 @@ def main():
         extra_img = st.file_uploader("4) 기타면 (측면/효능 등)", type=["jpg", "png", "jpeg"])
         
     with col2:
-        # UX 개선: 혼동 방지를 위해 업로드 항목을 용도별로 3가지로 명확히 분리
         st.subheader("📄 3. 증빙 문서 (무제한 다중 업로드)")
         lab_reports = st.file_uploader("5) 시험성적서 (여러 개 선택 가능)", type=["pdf", "jpg", "png", "jpeg"], accept_multiple_files=True)
-        ingredient_specs = st.file_uploader("6) 원료별 한글표시사항 서류 (여러 개 선택 가능)", type=["pdf", "jpg", "png", "jpeg"], accept_multiple_files=True, help="각종 첨가물, 비타민믹스 등의 스펙 서류를 올려주세요.")
-        recipe_docs = st.file_uploader("7) 가배합비 / 원재료 엑셀 목록 (여러 개 선택 가능)", type=["pdf", "xlsx", "csv"], accept_multiple_files=True, help="최종 투입 배합비율이나 엑셀로 정리된 원료 리스트를 올려주세요.")
+        ingredient_specs = st.file_uploader("6) 원료별 한글표시사항 서류", type=["pdf", "jpg", "png", "jpeg"], accept_multiple_files=True, help="각종 첨가물, 비타민믹스 등의 스펙 서류를 올려주세요.")
+        
+        # 🔥 수정사항: xlsx 제외, csv 및 pdf 허용
+        recipe_docs = st.file_uploader("7) 가배합비 / 원재료 목록 (PDF 변환 권장, CSV 가능)", type=["pdf", "csv"], accept_multiple_files=True, help="※ 엑셀 파일은 에러가 나므로, 반드시 [다른 이름으로 저장 -> PDF 또는 CSV] 형식으로 변환하여 업로드해주세요.")
 
     if st.button("🔍 서류 추출 및 QC 정밀 진단 시작", type="primary"):
         if not any([main_img, info_img, nutri_img, extra_img]) and not lab_reports and not ingredient_specs and not recipe_docs:
@@ -212,12 +213,20 @@ def main():
 
         user_content = []
         
-        # 파일 업로드 처리 함수
+        # 🔥 에러 방지용 커스텀 파일 업로드 처리 함수
         def add_file(f, label):
             if f:
                 if f.type.startswith("image"):
                     user_content.append(f"<{label} 이미지>")
                     user_content.append(Image.open(f))
+                elif f.name.lower().endswith(".csv"):
+                    # [핵심] CSV 파일은 API 업로드 우회 -> 텍스트로 즉시 읽어서 전달 (한글 깨짐 방지 처리)
+                    try:
+                        csv_text = f.getvalue().decode('utf-8')
+                    except UnicodeDecodeError:
+                        csv_text = f.getvalue().decode('cp949', errors='ignore')
+                    user_content.append(f"<{label} CSV 텍스트 데이터>")
+                    user_content.append(csv_text)
                 else:
                     temp = f"temp_{f.name}"
                     with open(temp, "wb") as file: file.write(f.getbuffer())
@@ -244,19 +253,21 @@ def main():
             
             if recipe_docs:
                 for idx, recipe in enumerate(recipe_docs):
-                    add_file(recipe, f"가배합비_엑셀목록_{idx+1}")
+                    add_file(recipe, f"가배합비_원료목록_{idx+1}")
 
             model = genai.GenerativeModel(MODEL_NAME, system_instruction=SYSTEM_PROMPT)
             
-            # 🔥 제품 유형 변수를 동적으로 프롬프트에 주입 (환자식/일반식 모드 전환)
+            # 🔥 (수정됨) CSV 데이터도 표 추출에 반드시 포함시키고 표 깨짐을 방지하는 강력한 프롬프트
             final_prompt = f"""
             [현재 검토 대상 제품 유형]: {product_type}
             업로드된 자료만 가지고 평가해라.
             특히 영양성분표에서 트랜스지방이 0g으로 되어있다면, 스스로 수학적 유추를 해서 합격시키지 말고 Rule 23에 따라 무조건 '0.5g 미만 표기 조건'에 대한 경고를 리포트에 출력해라.
             또한, Rule 30에 따라 알레르기 10종(대두 등)이 서류에 있는지 철저히 스캔하고 시안 누락 여부를 알려라.
+            
             [🚨치명적 오류 방지 1🚨]: 무기질/비타민 허용오차 비율 계산 공식은 무조건 `(성적서 실측값 ÷ 패키지 표시량) × 100` 입니다.
             [🚨치명적 오류 방지 2🚨]: Rule 32에 따라 영양구성비(탄:단:지) 검증 시 알룰로스/식이섬유를 감안하여 총 열량 기준으로 역산 검증하십시오.
-            [🚨치명적 오류 방지 3🚨]: Rule 33에 따라 업로드된 모든 원재료 서류를 분석하여 6개 항목 표(엑셀용)로 우선 추출하십시오. 그리고 제품 유형({product_type})의 기준에 맞춰 서류의 모든 하위 성분이 패키지 시안에 누락 없이 표기되었는지 정밀하게 1:1 대조하는 표를 작성하십시오. (환자식일 경우 글리신, 변성전분 등 단 하나의 누락도 용납 불가)
+            [🚨치명적 오류 방지 3🚨]: Rule 33에 따라 업로드된 '모든' 원재료 서류를 분석하여 6개 항목 표로 추출하십시오. (★★주의: PDF, 이미지뿐만 아니라 텍스트로 입력된 'CSV 데이터'도 반드시 포함하여 표를 작성할 것. 표가 중간에 끊기거나 빈칸으로 출력되지 않도록 마크다운 양식을 엄격히 유지할 것).
+            그리고 제품 유형({product_type})의 기준에 맞춰 서류의 모든 하위 성분이 패키지 시안에 누락 없이 표기되었는지 정밀하게 1:1 대조하는 표를 작성하십시오. (환자식일 경우 단 하나의 누락도 용납 불가)
             """
             
             pdf_refs = []
