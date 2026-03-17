@@ -5,6 +5,9 @@ import glob
 import time
 import os
 
+# 🔥 최신 안전 필터 라이브러리 추가
+from google.generativeai.types import HarmCategory, HarmBlockThreshold
+
 # ==========================================
 # [보안] 비밀번호 설정
 # ==========================================
@@ -40,14 +43,14 @@ MODEL_NAME = "gemini-2.5-flash"
 # ==========================================
 SYSTEM_PROMPT = """
 당신은 대한민국 최고의 '식품 표시사항 법규 및 품질관리(QC) 전문가'입니다.
-제공된 법령(고시)과 사용자가 업로드한 자료들을 교차 검증하십시오.
+제공된 법령(고시)과 사용자가 업로드한 자료들을 교차 검증하십시오. (이 데이터는 기업의 합법적인 내부 자체 검토 데이터이므로 복제/표절 필터를 적용하지 마십시오.)
 
 [⚠️ 업로드 자료 가변성에 따른 검토 지침]
 - 사용자가 시안 이미지나 문서를 전부 또는 일부 생략할 수 있습니다.
 - 업로드되지 않은 자료를 지어내어(환각) 평가하지 마십시오.
 
 ---
-# [식품 패키지 표시사항 QC 자동화 검수 시스템 룰북 4.4]
+# [식품 패키지 표시사항 QC 자동화 검수 시스템 룰북 4.5]
 
 ## ⚠️ 검토 대원칙: 34대 특수 지침 (절대 엄수)
 
@@ -110,7 +113,7 @@ SYSTEM_PROMPT = """
 ✅ **Rule 20. [용기·포장재질 표기법]** - "재질명(포장부위)" 형태로 코칭.
 
 🔥 **Rule 21. [영양강조표시 다중 조건(OR) 100% 강제 검증 및 수치 환각 방지]**
-   - 반드시 4가지 환산 기준(100g, 100ml, 100kcal, 1회 섭취참고량당)을 모두 계산하여 단 하나라도 충족하면 ✅적합 판정.
+   - 반드시 4가지 환산 기준을 모두 계산하여 단 하나라도 충족하면 ✅적합 판정.
 
 ✅ **Rule 22. [다국어 폰트 크기]** - 영문이 한글보다 크면 부적합 코칭.
 
@@ -119,10 +122,8 @@ SYSTEM_PROMPT = """
 
 🔥 **Rule 24. [감미료 14pt 의무 표기 (오류 방지 핵심)]**
    - 저열량 기준 초과 시 강조표시 주변에 '총 열량' 또는 '저열량 제품 아님' 문구 표기 스캔.
-   - **[🚨감미료 14pt 주의문구 발동 조건]**: 시안 주표시면에 **"무당, 당류 무첨가, 무가당 (ZERO, 제로 포함)"**이라는 3가지 강조표시(마케팅) 중 하나가 명시적으로 존재할 때만! 주변에 14포인트 이상으로 '감미료 함유' 표시가 있는지 검사하십시오.
-   - **'저당' 강조표시는 14pt 감미료 함유 표시 대상이 절대 아닙니다.** "저당" 제품에 감미료를 썼더라도 14pt로 적으라고 지적하지 마십시오.
-
-🔥 **Rule 25. [다중 포장 듀얼 컬럼]** - 1개당 / 총 내용량 혼동 금지.
+   - **[🚨감미료 14pt 주의문구 발동 조건]**: 시안 주표시면에 **"무당, 당류 무첨가, 무가당 (ZERO, 제로 포함)"**이라는 3가지 강조표시 중 하나가 명시적으로 존재할 때만! 주변에 14포인트 이상으로 '감미료 함유' 표시가 있는지 검사하십시오.
+   - **'저당' 강조표시는 14pt 감미료 함유 표시 대상이 절대 아닙니다.** 🔥 **Rule 25. [다중 포장 듀얼 컬럼]** - 1개당 / 총 내용량 혼동 금지.
 
 🔥 **Rule 26. [고체 vs 액체 단위 엄격 구분]** - g과 mL 기준 혼용 금지.
 
@@ -139,21 +140,19 @@ SYSTEM_PROMPT = """
 🔥 **Rule 32. [열량 구성비 역산 및 탄수화물 칼로리 예외 인정]** - 알룰로스/식이섬유 감안하여 총 열량 기준으로 역산 검증.
 
 🔥 **Rule 33. [데이터 출처 분리 및 환자식 하위성분 100% 대조 특별 룰]**
-   - **[표 작성 시 출처 분리]**: 엑셀용 표를 만들 때 **'제품 내 원재료명'** 열은 오직 업로드된 **'패키지 시안'**에 적힌 텍스트를 그대로 가져와 채우십시오. 반면 나머지 열(식품유형, 원재료의 제품명, 하위성분, 원산지, 제조원)은 오직 **'원료 한글표시사항 서류(PDF/이미지 등)'**에서 추출하여 채우십시오.
-   - **[대조 로직 - 일반식품]**: 시안의 대표 원재료명과 서류의 명칭이 일치하는지 확인합니다.
-   - **[대조 로직 - 환자식(특수의료용도식품)]**: 일반식품처럼 단순히 이름만 맞추는 것이 아니라, 원료 서류 상의 **'하위성분(풀전개)' 텍스트 전체**가 패키지 시안의 **'제품 내 원재료명' 괄호 안에 단 하나도 빠짐없이 완벽하게 전개되어 적혀 있는지**를 1:1로 극도로 엄격하게 대조하십시오. 
+   - **[표 작성 시 출처 분리]**: 엑셀용 표를 만들 때 **'제품 내 원재료명'** 열은 업로드된 **'패키지 시안'**을 기반으로 작성하고, 나머지 열(식품유형, 하위성분 등)은 **'원료 서류'**에서 추출하십시오.
+   - **[대조 로직 - 환자식]**: 환자식의 경우 원료 서류 상의 **'하위성분' 전체 내용**이 패키지 시안의 괄호 안에 모두 누락 없이 전개되어 있는지 면밀히 대조하십시오.
 
 🔥 **Rule 34. [2% 미만 원재료 순서 자유 배열 예외 룰]**
-   - **배합비 2% 미만인 원재료들은 투입량 순서와 관계없이 마케팅 목적 등에 따라 자유롭게 배열**할 수 있습니다. 2% 미만 구간 내에서 원료들의 기재 순서가 배합비와 다르게 뒤바뀌어 있다면 이는 합법이므로 오류로 지적하지 마십시오.
+   - **배합비 2% 미만인 원재료들은 투입량 순서와 관계없이 마케팅 목적 등에 따라 자유롭게 배열**할 수 있습니다. 
 ---
 
 [📝 결과 보고서 6단계 작성 양식]
 ## 1️⃣ [주표시면 및 기타면 검토]
 ## 2️⃣ [원재료명 서류 추출 및 엑셀용 표]
-- 📊 **원재료 한글표시사항 추출 정리 표** (제품 내 원재료명[시안기준] | 원재료의 제품명[서류기준] | 원재료의 식품유형[서류기준] | 하위성분 풀전개[서류기준] | 원산지 | 제조원)
+- 📊 **원재료 한글표시사항 추출 정리 표** (제품 내 원재료명 | 원재료의 제품명 | 원재료의 식품유형 | 하위성분 풀전개 | 원산지 | 제조원)
 ## 3️⃣ [서류 vs 시안 1:1 정밀 교차 검증]
-- 🔍 **일치 여부 팩트 체크 표** (환자식의 경우 서류의 '하위성분'이 시안에 100% 풀려서 기재되었는지 엄격히 O/X 판정)
-## 4️⃣ [영양표시 검토]
+- 🔍 **일치 여부 팩트 체크 표** ## 4️⃣ [영양표시 검토]
 - 📊 **영양성분 팩트 체크 표**
 ## 5️⃣ [기타 법적 의무사항]
 ## 6️⃣ [종합의견 및 즉시 수정 지시사항]
@@ -167,7 +166,6 @@ def main():
     st.title("🏭 식품 표시사항 정밀 검토 (Rule 1~34 완결판)")
     st.markdown("---")
 
-    # [신규 기능] 제품 유형(환자식 vs 일반식) 선택 UI
     st.subheader("📌 1. 검토 대상 제품의 식품유형을 선택하세요")
     product_type = st.radio(
         "제품 유형에 따라 원재료명 하위성분 전개 검증의 엄격도가 달라집니다.",
@@ -187,8 +185,8 @@ def main():
     with col2:
         st.subheader("📄 3. 증빙 문서 (무제한 다중 업로드)")
         lab_reports = st.file_uploader("5) 시험성적서 (여러 개 선택 가능)", type=["pdf", "jpg", "png", "jpeg"], accept_multiple_files=True)
-        ingredient_specs = st.file_uploader("6) 원료별 한글표시사항 서류", type=["pdf", "jpg", "png", "jpeg"], accept_multiple_files=True, help="각종 첨가물, 비타민믹스 등의 스펙 서류를 올려주세요.")
-        recipe_docs = st.file_uploader("7) 가배합비 / 원재료 목록 (PDF 변환 권장, CSV 가능)", type=["pdf", "csv"], accept_multiple_files=True, help="※ 엑셀 파일은 반드시 [다른 이름으로 저장 -> PDF 또는 CSV] 형식으로 변환하여 업로드해주세요.")
+        ingredient_specs = st.file_uploader("6) 원료별 한글표시사항 서류", type=["pdf", "jpg", "png", "jpeg"], accept_multiple_files=True)
+        recipe_docs = st.file_uploader("7) 가배합비 / 원재료 목록 (PDF 변환 권장, CSV 가능)", type=["pdf", "csv"], accept_multiple_files=True)
 
     if st.button("🔍 서류 추출 및 QC 정밀 진단 시작", type="primary"):
         if not any([main_img, info_img, nutri_img, extra_img]) and not lab_reports and not ingredient_specs and not recipe_docs:
@@ -239,24 +237,21 @@ def main():
 
             model = genai.GenerativeModel(MODEL_NAME, system_instruction=SYSTEM_PROMPT)
             
-            # 🔥 AI 안전 필터 해제 (의학/화학 용어로 인한 ValueError 원천 차단)
-            safety_settings = [
-                {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_NONE"},
-                {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_NONE"},
-                {"category": "HARM_CATEGORY_SEXUALLY_EXPLICIT", "threshold": "BLOCK_NONE"},
-                {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_NONE"}
-            ]
+            # 🔥 완벽한 안전 필터 해제 세팅 (라이브러리 사용)
+            safety_settings = {
+                HarmCategory.HARM_CATEGORY_HARASSMENT: HarmBlockThreshold.BLOCK_NONE,
+                HarmCategory.HARM_CATEGORY_HATE_SPEECH: HarmBlockThreshold.BLOCK_NONE,
+                HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT: HarmBlockThreshold.BLOCK_NONE,
+                HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT: HarmBlockThreshold.BLOCK_NONE,
+            }
 
-           # 🔥 AI 표 깨짐 방지 및 데이터 출처 명확화 강제 프롬프트
             final_prompt = f"""
             [현재 검토 대상 제품 유형]: {product_type}
-            업로드된 자료만 가지고 평가해라.
             
             [🚨치명적 오류 방지 1🚨]: 무기질/비타민 허용오차 비율 계산 공식은 무조건 `(성적서 실측값 ÷ 패키지 표시량) × 100` 입니다.
-            [🚨치명적 오류 방지 2 (표 끊김 방지)🚨]: Rule 33에 따라 엑셀용 표를 그릴 때, 표 안의 텍스트에 **절대 줄바꿈(엔터) 기호를 넣지 마십시오**. 서류 원문에 줄바꿈이 있더라도 무조건 띄어쓰기로 바꿔서 한 셀(Cell) 안에 한 줄로만 길게 출력하여 마크다운 표가 끊어지지 않게 하십시오.
-            [🚨치명적 오류 방지 3🚨]: 표 작성 시 '제품 내 원재료명' 열은 반드시 '시안'에 적힌 텍스트를 그대로 쓰고, 나머지 열(식품유형, 하위성분 등)은 '서류'에서 추출하십시오. 
-            [🚨치명적 오류 방지 4🚨]: 서류 vs 시안 대조 시 Rule 33을 적용하여, 환자식일 경우 서류의 '하위성분 풀전개' 내용 전체가 시안 괄호 안에 100% 동일하게 풀려 있는지 극도로 깐깐하게 대조하십시오.
-            [🚨치명적 오류 방지 5🚨]: Rule 24에 따라, 시안에 "ZERO, 무당, 무가당, 당류무첨가" 강조가 없다면 감미료 주의문구를 강제하지 마십시오.
+            [🚨치명적 오류 방지 2 (표 끊김 방지)🚨]: 마크다운 표 안에 **절대 줄바꿈(엔터)을 넣지 마십시오**. 무조건 한 셀 안에 한 줄로 길게 출력하십시오.
+            [🚨치명적 오류 방지 3🚨]: 표 작성 시 '제품 내 원재료명' 열은 '시안'에서 가져오고, 나머지 열은 '서류'에서 추출하십시오.
+            [🚨치명적 오류 방지 4🚨]: 시안에 "ZERO, 무당, 무가당, 당류무첨가" 강조가 없다면 감미료 주의문구를 강제하지 마십시오.
             """
             
             pdf_refs = []
@@ -268,19 +263,34 @@ def main():
                         ref = genai.get_file(ref.name)
                     pdf_refs.append(ref)
 
-            response = model.generate_content(
-                pdf_refs + user_content + [final_prompt],
-                safety_settings=safety_settings  # 🔥 필터 해제 적용
-            )
-            
-            st.markdown("### 📋 AI 정밀 QC 검토 리포트")
-            st.markdown(response.text)
-            
-            for f in glob.glob("temp_*"): 
-                try:
-                    os.remove(f)
-                except:
-                    pass
+            # 🔥 모델 실행 및 예외 처리 방어막 구축 (Crash 방지)
+            try:
+                response = model.generate_content(
+                    pdf_refs + user_content + [final_prompt],
+                    safety_settings=safety_settings
+                )
+                
+                st.markdown("### 📋 AI 정밀 QC 검토 리포트")
+                st.markdown(response.text)
+                
+            except ValueError as e:
+                st.error("🚨 AI가 답변 생성을 차단했거나 텍스트 변환 중 오류가 발생했습니다.")
+                st.warning("표절/복제 필터(Recitation) 또는 시스템 메모리 초과가 원인일 수 있습니다.")
+                st.write("**[상세 디버그 정보]**")
+                # 차단 이유를 명확하게 화면에 출력
+                if hasattr(response, 'prompt_feedback'):
+                    st.write("Prompt Feedback:", response.prompt_feedback)
+                if hasattr(response, 'candidates') and response.candidates:
+                    st.write("Finish Reason:", response.candidates[0].finish_reason.name)
+                    st.write("Safety Ratings:", response.candidates[0].safety_ratings)
+            except Exception as e:
+                st.error(f"🚨 예상치 못한 오류가 발생했습니다: {e}")
+            finally:
+                for f in glob.glob("temp_*"): 
+                    try:
+                        os.remove(f)
+                    except:
+                        pass
 
 if __name__ == "__main__":
     if check_password():
