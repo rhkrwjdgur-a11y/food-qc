@@ -30,7 +30,7 @@ else:
     API_KEY = os.environ.get("GOOGLE_API_KEY")
 
 genai.configure(api_key=API_KEY)
-MODEL_NAME = "gemini-1.5-pro" # 폰트 크기 및 미세 OCR 판독을 위해 Pro 모델 유지
+MODEL_NAME = "gemini-1.5-pro-latest" # 폰트 크기 및 미세 OCR 판독을 위해 Pro 모델 유지
 
 # 2. 통합 전문가 프롬프트 (Rule 1~45 무삭제 전체 원본 복원)
 SYSTEM_PROMPT = """당신은 대한민국 최고의 '식품 표시사항 법규 및 품질관리(QC) 전문가'입니다.
