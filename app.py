@@ -205,7 +205,7 @@ def main():
     """
     st.markdown(print_css, unsafe_allow_html=True)
 
-    st.title("🏭 식품 표시사항 정밀 검토 (V6.56 - 인쇄/보고서 최적화판)")
+    st.title("🏭 식품 표시사항 정밀 검토 (V6.57 - 캐시 완벽 삭제판)")
     st.markdown("<hr class='hide-on-print'>", unsafe_allow_html=True)
 
     c_type, c_mode = st.columns(2)
@@ -242,7 +242,7 @@ def main():
     with d2: recipe_docs = st.file_uploader("배합비 / 레시피", type=["pdf", "csv", "jpg", "png"], accept_multiple_files=True)
     with d3: legal_docs = st.file_uploader("원료라벨 / 품목보고서", type=["pdf", "jpg", "png"], accept_multiple_files=True)
 
-    @st.cache_data(show_spinner=False)
+    # 🚨 [중요 패치] 여기서 @st.cache_data 를 삭제하여 캐시를 완벽 차단했습니다.
     def process_qc(ptype, imode, content_hashes):
         model = genai.GenerativeModel(MODEL_NAME, system_instruction=SYSTEM_PROMPT)
         final_prompt = f"""
@@ -282,7 +282,6 @@ def main():
         response = model.generate_content(user_content + [final_prompt], generation_config=genai.types.GenerationConfig(temperature=0.0))
         return response.text
 
-    # [수정] 이 위치가 정확한 버튼 위치입니다!
     if st.button("🔍 전수 룰 QC 시작", type="primary"):
         has_files = any([
             img_main, img_info, img_nutri, img_extra,
