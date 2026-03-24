@@ -32,10 +32,11 @@ MODEL_NAME = "gemini-2.5-flash"
 
 # 2. 통합 전문가 프롬프트 (Rule 1~46 완전 전개 무삭제판)
 SYSTEM_PROMPT = """당신은 대한민국 최고의 '식품 표시사항 법규 및 품질관리(QC) 전문가'입니다.
+모든 검토 결과의 결론 앞에는 반드시 ✅(적합) 또는 🚨(부적합) 이모지를 붙이십시오.
 제공된 법령(고시)과 사용자가 업로드한 자료들을 교차 검증하십시오. 당신의 판단은 100% 일관되어야 하며, 임의로 수치를 지어내거나 계산을 건너뛰는 행위(환각)를 엄격히 금지합니다. 
 
 ---
-# [식품 패키지 표시사항 QC 자동화 검수 시스템 룰북 6.37]
+# [식품 패키지 표시사항 QC 자동화 검수 시스템 룰북]
 
 ## ⚠️ 검토 대원칙: 46대 특수 지침 (절대 엄수, 생략 없이 모든 지침을 숙지할 것)
 
@@ -184,18 +185,20 @@ SYSTEM_PROMPT = """당신은 대한민국 최고의 '식품 표시사항 법규 
    - **[🚨숫자+명칭 쪼개기 강제]**: 제품명에 '17곡', '9곡' 등 숫자가 포함된 경우 '합산 표기'를 금지합니다. 식약처 FAQ 유권해석에 따라 주표시면에 반드시 N개 하위 원료의 개별 명칭과 함량(%)이 모두 전개되어 있는지 엄격히 스캔하십시오.
    - **[🚨원료 본질 교차 검증]**: 제품명에서 '곡(곡류)'을 강조했으나 실제 하위 성분에 두류(대두, 팥)나 종실류(참깨)가 섞여 있는지 대조하여 보고하십시오.
 ---
+🚨 [출력 고정 지침]
+1. 모든 검토 섹션(1~6번)의 하위 결과마다 ✅ 또는 🚨 기호를 문장 맨 앞에 반드시 표시하십시오.
 """
 
 def main():
     st.set_page_config(page_title="식품 QC 마스터", page_icon="🏭", layout="wide")
-    st.title("🏭 식품 표시사항 정밀 검토 (V6.37 - 무삭제 완전판)")
+    st.title("🏭 식품 표시사항 정밀 검토 (V6.46 - 완전판)")
     st.markdown("---")
 
     product_type = st.radio("📌 1. 식품유형 선택", ("특수의료용도식품 / 환자식", "일반식품"))
     st.markdown("---")
 
-    # [UI] 시안 및 서류 업로드
-    st.subheader("🎨 2. 시안 이미지 (준비된 면만 업로드)")
+    # [UI] 시안 업로드
+    st.subheader("🎨 2. 시안 이미지 (주표시면/정보표시면/영양정보/기타면)")
     c1, c2, c3, c4 = st.columns(4)
     with c1: img_main = st.file_uploader("주표시면(앞면)", type=["jpg", "png", "jpeg"], key="img_main")
     with c2: img_info = st.file_uploader("정보표시면(뒷면)", type=["jpg", "png", "jpeg"], key="img_info")
@@ -203,40 +206,51 @@ def main():
     with c4: img_extra = st.file_uploader("기타면/측면", type=["jpg", "png", "jpeg"], key="img_extra")
 
     st.markdown("---")
-    st.subheader("📄 3. 증빙 서류 (분리 업로드)")
+    # [UI] 서류 업로드
+    st.subheader("📄 3. 증빙 서류 (성적서/배합비/한글라벨)")
     d1, d2, d3 = st.columns(3)
     with d1: report_docs = st.file_uploader("시험성적서", type=["pdf", "jpg", "png"], accept_multiple_files=True)
     with d2: recipe_docs = st.file_uploader("배합비 / 레시피", type=["pdf", "csv", "jpg", "png"], accept_multiple_files=True)
     with d3: legal_docs = st.file_uploader("원료라벨 / 품목보고서", type=["pdf", "jpg", "png"], accept_multiple_files=True)
 
     @st.cache_data(show_spinner=False)
-    def process_qc(product_type, content_hashes):
+    def process_qc(ptype, content_hashes):
         model = genai.GenerativeModel(MODEL_NAME, system_instruction=SYSTEM_PROMPT)
         final_prompt = f"""
-        [제품유형]: {product_type}
-        🚨[사고과정 강제 지시]🚨
-        1. 알레르기는 디자인 박스가 아닌 '~함유' 텍스트를 추적하여 검토할 것 (Rule 13).
-        2. 5% 미만 복합원재료의 감미료 생략은 지적하지 말 것 (Rule 5).
-        3. 미량 원료의 하위 원산지 표시를 강요하지 말 것 (Rule 29).
-        4. 제품명 '17곡' 등 숫자가 있다면 개별 함량 전개 여부를 엄격히 볼 것 (Rule 46).
+        [제품유형]: {ptype}
+        
+        🚨 [출력 형식 강제 명령] 🚨
+        당신은 모든 판단 결과 앞에 반드시 ✅(적합) 또는 🚨(부적합)을 붙여야 합니다.
+        아래 목차 형식을 100% 준수하십시오.
 
         ## 1️⃣ [주표시면 및 마케팅 뱃지]
-        ## 2️⃣ [원재료명 엑셀용 표]
+        - 결론: (✅ 또는 🚨)
+        
+        ## 2️⃣ [원재료명 및 원산지 대조]
+        - 결론: (✅ 또는 🚨)
+        - (🚨 미량 원산지 지적 절대 금지)
+        
         ## 3️⃣ [서류 vs 시안 교차 검증 (알레르기 텍스트 추적)]
+        - 결론: (✅ 또는 🚨)
+        
         ## 4️⃣ [영양표시 및 % 기준치 검증]
+        - 결론: (✅ 또는 🚨)
+        
         ## 5️⃣ [기타 법적 의무사항]
+        - 결론: (✅ 또는 🚨)
+        
         ## 6️⃣ [종합의견 및 즉시 수정 지시사항]
+        - 수정이 필요하면 🚨, 완벽하면 ✅ 기호와 함께 작성하십시오.
         """
         response = model.generate_content(user_content + [final_prompt], generation_config=genai.types.GenerationConfig(temperature=0.0))
         return response.text
 
-if st.button("🔍 전수 룰 QC 시작", type="primary"):
-        # --- [추가된 방어 코드: 시작] ---
-        # 사용자가 파일을 하나도 올리지 않았는지 체크합니다.
+    # 버튼 로직: 파일 업로드들 밑에 존재하며, 들여쓰기를 함수 안에 정확히 맞춤
+    if st.button("🔍 전수 룰 QC 시작", type="primary"):
+        # 파일이 하나라도 업로드 되었는지 체크 (이전 결과 표출 방지)
         if not (img_main or img_info or img_nutri or img_extra or report_docs or recipe_docs or legal_docs):
             st.warning("🚨 검토할 시안이나 서류 파일을 먼저 업로드해주세요! 파일을 넣지 않으면 이전 결과가 표시될 수 있습니다.")
-            st.stop() # 여기서 실행을 즉시 중단하여 이전 결과가 나오지 않게 함
-        # --- [추가된 방어 코드: 끝] ---
+            st.stop()
 
         user_content = []
         def process_single_file(f, label):
@@ -247,7 +261,8 @@ if st.button("🔍 전수 룰 QC 시작", type="primary"):
                 temp = f"temp_{f.name}"
                 with open(temp, "wb") as file: file.write(f.getbuffer())
                 uploaded = genai.upload_file(temp)
-                while uploaded.state.name == "PROCESSING": time.sleep(1)
+                while uploaded.state.name == "PROCESSING": 
+                    time.sleep(1)
                 user_content.append(uploaded)
 
         with st.spinner("46대 룰북 전수 가동 중..."):
@@ -265,9 +280,11 @@ if st.button("🔍 전수 룰 QC 시작", type="primary"):
             try:
                 result_text = process_qc(product_type, None)
                 st.markdown(result_text)
-            except Exception as e: st.error(f"🚨 오류: {e}")
+            except Exception as e: 
+                st.error(f"🚨 오류: {e}")
             finally:
-                for f in glob.glob("temp_*"): os.remove(f)
+                for f in glob.glob("temp_*"): 
+                    os.remove(f)
 
 if __name__ == "__main__":
     if check_password(): main()
