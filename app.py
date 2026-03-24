@@ -230,7 +230,7 @@ def main():
         response = model.generate_content(user_content + [final_prompt], generation_config=genai.types.GenerationConfig(temperature=0.0))
         return response.text
 
-   if st.button("🔍 전수 룰 QC 시작", type="primary"):
+ if st.button("🔍 전수 룰 QC 시작", type="primary"):
         # --- [추가된 방어 코드: 시작] ---
         # 사용자가 파일을 하나도 올리지 않았는지 체크합니다.
         if not (img_main or img_info or img_nutri or img_extra or report_docs or recipe_docs or legal_docs):
@@ -249,9 +249,6 @@ def main():
                 uploaded = genai.upload_file(temp)
                 while uploaded.state.name == "PROCESSING": time.sleep(1)
                 user_content.append(uploaded)
-
-        with st.spinner("사용자님의 46대 룰북 전체 가동 중..."):
-            # (이하 기존 파일 처리 로직 및 process_qc 호출 부분 동일)
 
         with st.spinner("46대 룰북 전수 가동 중..."):
             if img_main: process_single_file(img_main, "시안_주표시면")
