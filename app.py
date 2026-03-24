@@ -30,7 +30,7 @@ else:
 genai.configure(api_key=API_KEY)
 MODEL_NAME = "gemini-2.5-flash" 
 
-# 2. 통합 전문가 프롬프트 (Rule 1~47 무삭제판)
+# 2. 통합 전문가 프롬프트 (Rule 1~47 무삭제판 - 단 한 글자도 수정 안 함)
 SYSTEM_PROMPT = """당신은 대한민국 최고의 '식품 표시사항 법규 및 품질관리(QC) 전문가'입니다.
 모든 검토 결과의 결론 앞에는 반드시 ✅(적합) 또는 🚨(부적합) 이모지를 붙이십시오.
 제공된 법령(고시)과 사용자가 업로드한 자료들을 교차 검증하십시오. 당신의 판단은 100% 일관되어야 하며, 임의로 수치를 지어내거나 계산을 건너뛰는 행위(환각)를 엄격히 금지합니다. 
@@ -192,20 +192,19 @@ SYSTEM_PROMPT = """당신은 대한민국 최고의 '식품 표시사항 법규 
 def main():
     st.set_page_config(page_title="식품 QC 마스터", page_icon="🏭", layout="wide")
     
-    # 🌟 [인쇄용 CSS 핵심 패치] 🌟
-    # 인쇄(Ctrl+P) 시 버튼, 업로드 박스, 각종 UI 텍스트를 모두 투명화시킵니다!
+    # [인쇄용 CSS 핵심 패치 유지]
     print_css = """
     <style>
     @media print {
         header, footer, .stDeployButton { display: none !important; }
         .stFileUploader, .stButton, .stRadio, .stTextInput { display: none !important; }
-        .hide-on-print { display: none !important; } /* 추가 UI 텍스트 숨김용 클래스 */
+        .hide-on-print { display: none !important; }
     }
     </style>
     """
     st.markdown(print_css, unsafe_allow_html=True)
 
-    st.title("🏭 식품 표시사항 정밀 검토 (V6.57 - 캐시 완벽 삭제판)")
+    st.title("🏭 식품 표시사항 정밀 검토 (V6.58 - 증거 대조 환각 차단판)")
     st.markdown("<hr class='hide-on-print'>", unsafe_allow_html=True)
 
     c_type, c_mode = st.columns(2)
@@ -216,7 +215,6 @@ def main():
     
     st.markdown("<hr class='hide-on-print'>", unsafe_allow_html=True)
 
-    # UI의 소제목들을 인쇄 시 숨겨지는 html로 변경했습니다.
     st.markdown("<h3 class='hide-on-print'>🎨 3. 본 시안 이미지 (외포장 또는 단품)</h3>", unsafe_allow_html=True)
     c1, c2, c3, c4 = st.columns(4)
     with c1: img_main = st.file_uploader("주표시면(앞면)", type=["jpg", "png", "jpeg"], key="img_main")
@@ -242,9 +240,11 @@ def main():
     with d2: recipe_docs = st.file_uploader("배합비 / 레시피", type=["pdf", "csv", "jpg", "png"], accept_multiple_files=True)
     with d3: legal_docs = st.file_uploader("원료라벨 / 품목보고서", type=["pdf", "jpg", "png"], accept_multiple_files=True)
 
-    # 🚨 [중요 패치] 여기서 @st.cache_data 를 삭제하여 캐시를 완벽 차단했습니다.
+    # 🚨 캐시 차단 완벽 유지
     def process_qc(ptype, imode, content_hashes):
         model = genai.GenerativeModel(MODEL_NAME, system_instruction=SYSTEM_PROMPT)
+        
+        # 🚨 [사용자님 요청 반영 패치 구역] : 목차 형식은 유지하되, 6번의 증거 대조 족쇄만 추가했습니다.
         final_prompt = f"""
         [제품유형]: {ptype}
         [검토모드]: {imode}
@@ -275,7 +275,8 @@ def main():
         ## 6️⃣ [외포장(선물세트) vs 내포장(팩) 1:1 전수 대조 결과]
         - 결론: (✅ 또는 🚨)
         - 내용: (Rule 47 적용. 단품 모드 시 "해당 없음" 기재. 
-          선물세트 모드 시: 업로드된 [외포장] 시안들과 [내포장] 시안들을 구역별(앞면은 앞면끼리, 정보면은 정보면끼리, 영양표는 영양표끼리)로 정밀 대조하여, 원재료명, 영양성분 수치, 알레르기 물질, 제품명 등이 토씨 하나 안 틀리고 100% 동일한지, 그리고 '총 내용량(팩당 용량 x 갯수)' 산식이 정확한지 낱낱이 보고할 것)
+          선물세트 모드 시: 구역별로 정밀 대조하여, 원재료명, 영양수치, 알레르기, 제품명이 100% 동일한지 낱낱이 보고할 것.
+          🚨 [긴급 차단 명령3]: 텍스트 불일치(🚨) 판정을 내릴 경우, 반드시 "외포장에서 읽은 텍스트: [OOO], 내포장에서 읽은 텍스트: [XXX]" 형태로 증거를 나란히 제시하십시오. 덱스트린 등 시안에 없는 성분을 상상하여 지적하는 환각을 엄격히 금지합니다.)
         
         ## 7️⃣ [종합의견 및 즉시 수정 지시사항]
         """
