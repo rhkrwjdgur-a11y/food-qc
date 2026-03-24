@@ -30,7 +30,7 @@ else:
 genai.configure(api_key=API_KEY)
 MODEL_NAME = "gemini-2.5-flash" 
 
-# 2. 통합 전문가 프롬프트 (Rule 1~47 완전 전개 풀텍스트판)
+# 2. 통합 전문가 프롬프트 (Rule 1~47 무삭제판)
 SYSTEM_PROMPT = """당신은 대한민국 최고의 '식품 표시사항 법규 및 품질관리(QC) 전문가'입니다.
 모든 검토 결과의 결론 앞에는 반드시 ✅(적합) 또는 🚨(부적합) 이모지를 붙이십시오.
 제공된 법령(고시)과 사용자가 업로드한 자료들을 교차 검증하십시오. 당신의 판단은 100% 일관되어야 하며, 임의로 수치를 지어내거나 계산을 건너뛰는 행위(환각)를 엄격히 금지합니다. 
@@ -83,7 +83,7 @@ SYSTEM_PROMPT = """당신은 대한민국 최고의 '식품 표시사항 법규 
 🔥 **Rule 13. [알레르기 '~함유' 키워드 텍스트 정밀 추적]**
    - 음영 박스나 배경색 인식 오류를 방지하기 위해, 시각적 형태가 아닌 **"~함유"** (예: 대두, 밀 함유)라는 텍스트 키워드를 문서 전체에서 추적하십시오. 
 
-🔥 **Rule 14. [표 4 의무 첨가물 용도명 병기 (6대 용도 한정 및 오지랖 금지)]**
+🔥 **Rule 14. [표 4 의무 첨가물 용도명 병기 (6대 용도 한정 및 오지랖/환각 금지)]**
    - **[🚨핵심 명령]**: 「식품등의 표시기준」 [표 4]에 명시된 딱 6가지 용도(감미료, 발색제, 보존료, 산화방지제, 착색료, 향미증진제)에 대해서만 용도명을 병기하라고 요구하십시오.
    - **[🚨환각 및 오지랖 절대 금지]**: '향료'는 '향미증진제'가 아닙니다. AI가 자의적으로 향료를 향미증진제로 둔갑시켜 괄호를 요구하는 헛소리를 절대 금지합니다. 대두레시틴, 카라기난, 탄산수소나트륨 등 6대 용도에 속하지 않는 첨가물에 대해 용도명을 적으라고 지적하는 행위를 100% 금지합니다.
 
@@ -191,8 +191,22 @@ SYSTEM_PROMPT = """당신은 대한민국 최고의 '식품 표시사항 법규 
 
 def main():
     st.set_page_config(page_title="식품 QC 마스터", page_icon="🏭", layout="wide")
-    st.title("🏭 식품 표시사항 정밀 검토 (V6.55 - 동적 UI 최적화판)")
-    st.markdown("---")
+    
+    # 🌟 [인쇄용 CSS 핵심 패치] 🌟
+    # 인쇄(Ctrl+P) 시 버튼, 업로드 박스, 각종 UI 텍스트를 모두 투명화시킵니다!
+    print_css = """
+    <style>
+    @media print {
+        header, footer, .stDeployButton { display: none !important; }
+        .stFileUploader, .stButton, .stRadio, .stTextInput { display: none !important; }
+        .hide-on-print { display: none !important; } /* 추가 UI 텍스트 숨김용 클래스 */
+    }
+    </style>
+    """
+    st.markdown(print_css, unsafe_allow_html=True)
+
+    st.title("🏭 식품 표시사항 정밀 검토 (V6.56 - 인쇄/보고서 최적화판)")
+    st.markdown("<hr class='hide-on-print'>", unsafe_allow_html=True)
 
     c_type, c_mode = st.columns(2)
     with c_type:
@@ -200,32 +214,29 @@ def main():
     with c_mode:
         inspection_mode = st.radio("📌 2. 검토 모드 선택", ("단품(개별 팩) 검토", "선물세트(외포장/번들) 100% 일치 교차 검토"))
     
-    st.markdown("---")
+    st.markdown("<hr class='hide-on-print'>", unsafe_allow_html=True)
 
-    # [UI] 3. 본 시안 (외포장 또는 단품) 업로드
-    st.subheader("🎨 3. 본 시안 이미지 (외포장 또는 단품)")
+    # UI의 소제목들을 인쇄 시 숨겨지는 html로 변경했습니다.
+    st.markdown("<h3 class='hide-on-print'>🎨 3. 본 시안 이미지 (외포장 또는 단품)</h3>", unsafe_allow_html=True)
     c1, c2, c3, c4 = st.columns(4)
     with c1: img_main = st.file_uploader("주표시면(앞면)", type=["jpg", "png", "jpeg"], key="img_main")
     with c2: img_info = st.file_uploader("정보표시면(뒷면)", type=["jpg", "png", "jpeg"], key="img_info")
     with c3: img_nutri = st.file_uploader("영양성분표", type=["jpg", "png", "jpeg"], key="img_nutri")
     with c4: img_extra = st.file_uploader("기타면/측면", type=["jpg", "png", "jpeg"], key="img_extra")
 
-    # 변수 초기화 (조건문에 들어가지 않을 때를 대비)
     img_inner_main = img_inner_info = img_inner_nutri = img_inner_extra = None
 
-    # [UI] 4. 내포장(개별 팩) 4분할 업로드 -> 선물세트 선택 시에만 짠! 하고 나타납니다.
     if "선물세트" in inspection_mode:
-        st.markdown("---")
-        st.subheader("🎁 4. 내포장(개별 팩) 시안 (선물세트 대조 시 필수)")
+        st.markdown("<hr class='hide-on-print'>", unsafe_allow_html=True)
+        st.markdown("<h3 class='hide-on-print'>🎁 4. 내포장(개별 팩) 시안 (선물세트 대조 시 필수)</h3>", unsafe_allow_html=True)
         ic1, ic2, ic3, ic4 = st.columns(4)
         with ic1: img_inner_main = st.file_uploader("내포장 주표시면", type=["jpg", "png", "jpeg"], key="inner_main")
         with ic2: img_inner_info = st.file_uploader("내포장 정보표시면", type=["jpg", "png", "jpeg"], key="inner_info")
         with ic3: img_inner_nutri = st.file_uploader("내포장 영양성분표", type=["jpg", "png", "jpeg"], key="inner_nutri")
         with ic4: img_inner_extra = st.file_uploader("내포장 기타면", type=["jpg", "png", "jpeg"], key="inner_extra")
 
-    st.markdown("---")
-    # [UI] 5. 서류 업로드 (번호가 자동으로 4번 혹은 5번으로 인식되도록 구성)
-    st.subheader("📄 증빙 서류 (성적서/배합비/한글라벨)")
+    st.markdown("<hr class='hide-on-print'>", unsafe_allow_html=True)
+    st.markdown("<h3 class='hide-on-print'>📄 증빙 서류 (성적서/배합비/한글라벨)</h3>", unsafe_allow_html=True)
     d1, d2, d3 = st.columns(3)
     with d1: report_docs = st.file_uploader("시험성적서", type=["pdf", "jpg", "png"], accept_multiple_files=True)
     with d2: recipe_docs = st.file_uploader("배합비 / 레시피", type=["pdf", "csv", "jpg", "png"], accept_multiple_files=True)
@@ -271,9 +282,8 @@ def main():
         response = model.generate_content(user_content + [final_prompt], generation_config=genai.types.GenerationConfig(temperature=0.0))
         return response.text
 
-    # [버튼 로직]
+    # [수정] 이 위치가 정확한 버튼 위치입니다!
     if st.button("🔍 전수 룰 QC 시작", type="primary"):
-        # 방어 로직 (외포장, 내포장, 서류 중 하나라도 있는지 체크)
         has_files = any([
             img_main, img_info, img_nutri, img_extra,
             img_inner_main, img_inner_info, img_inner_nutri, img_inner_extra,
@@ -297,19 +307,16 @@ def main():
                 user_content.append(uploaded)
 
         with st.spinner(f"47대 룰북 원문 100% 적용 검증 중... [{inspection_mode}]"):
-            # 본 시안 처리
-            if img_main: process_single_file(img_main, "시안_주표시면")
-            if img_info: process_single_file(img_info, "시안_정보표시면")
-            if img_nutri: process_single_file(img_nutri, "시안_영양성분표")
-            if img_extra: process_single_file(img_extra, "시안_기타면")
+            if img_main: process_single_file(img_main, "시안_외포장_주표시면")
+            if img_info: process_single_file(img_info, "시안_외포장_정보표시면")
+            if img_nutri: process_single_file(img_nutri, "시안_외포장_영양성분표")
+            if img_extra: process_single_file(img_extra, "시안_외포장_기타면")
             
-            # 내포장 4분할 처리 (선물세트 모드 시)
             if img_inner_main: process_single_file(img_inner_main, "시안_내포장_주표시면")
             if img_inner_info: process_single_file(img_inner_info, "시안_내포장_정보표시면")
             if img_inner_nutri: process_single_file(img_inner_nutri, "시안_내포장_영양성분표")
             if img_inner_extra: process_single_file(img_inner_extra, "시안_내포장_기타면")
             
-            # 서류 처리
             if report_docs: 
                 for f in report_docs: process_single_file(f, "근거_성적서")
             if recipe_docs:
