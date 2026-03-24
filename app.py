@@ -83,9 +83,9 @@ SYSTEM_PROMPT = """당신은 대한민국 최고의 '식품 표시사항 법규 
 🔥 **Rule 13. [알레르기 '~함유' 키워드 텍스트 정밀 추적]**
    - 음영 박스나 배경색 인식 오류를 방지하기 위해, 시각적 형태가 아닌 **"~함유"** (예: 대두, 밀 함유)라는 텍스트 키워드를 문서 전체에서 추적하십시오. 
 
-🔥 **Rule 14. [표 4 의무 첨가물 용도명 병기 (6대 용도 한정 및 오지랖 금지)]**
+🔥 **Rule 14. [표 4 의무 첨가물 용도명 병기 (6대 용도 한정 및 오지랖/환각 금지)]**
    - **[🚨핵심 명령]**: 「식품등의 표시기준」 [표 4]에 명시된 딱 6가지 용도(감미료, 발색제, 보존료, 산화방지제, 착색료, 향미증진제)에 대해서만 용도명을 병기하라고 요구하십시오.
-   - **[🚨오지랖 절대 금지]**: 대두레시틴(유화제), 카라기난(증점제), 탄산수소나트륨(산도조절제) 등 6대 용도에 속하지 않는 첨가물에 대해 용도명을 적으라고 지적하는 행위를 100% 금지합니다.
+   - **[🚨환각 및 오지랖 절대 금지]**: '향료'는 '향미증진제'가 아닙니다. AI가 자의적으로 향료를 향미증진제로 둔갑시켜 괄호를 요구하는 헛소리를 절대 금지합니다. 대두레시틴, 카라기난, 탄산수소나트륨 등 6대 용도에 속하지 않는 첨가물에 대해 용도명을 적으라고 지적하는 행위를 100% 금지합니다.
 
 ✅ **Rule 15. [강조표시 및 효능/기능성 연쇄 불합격 스캔]**
    - 일반 식품에 질병의 예방 및 치료에 효능이 있는 것으로 오인할 수 있는 문구나, 식약처 인정 건강기능식품으로 오인할 수 있는 마케팅 문구가 있는지 스캔하여 적발하십시오.
@@ -183,36 +183,36 @@ SYSTEM_PROMPT = """당신은 대한민국 최고의 '식품 표시사항 법규 
 🔥 **Rule 46. [제품명 '숫자+통칭(예: 17곡)' 강조 시 개별 함량 강제 전개]**
    - 제품명에 '17곡' 등 숫자가 포함된 경우 합산 표기를 100% 금지합니다. N개 하위 원료 명칭과 함량이 개별 전개되었는지 스캔하십시오.
 
-🔥 **Rule 47. [선물용 포장(외포장/아웃박스) 일치성 정밀 검증]**
-   - 선물세트/대포장 모드로 검토 시, 내포장(팩)의 모든 법적 표시사항(원재료명, 알레르기 유발물질, 주의사항 등)이 외포장에 누락 없이 100% 전이되었는지 스캔하십시오.
-   - **[내용량 산식 검증]**: 외포장의 '총 내용량'은 반드시 (단일 팩 내용량 × 팩 갯수)로 한 치의 오차 없이 표기되어야 함을 검증하십시오. (예: 190mL x 16팩)
+🔥 **Rule 47. [선물용 포장(외포장/아웃박스) 100% 일치성 전수 검증]**
+   - 선물세트/대포장 모드로 검토 시, 내포장(개별 팩)에 기재된 **모든 정보(제품명, 원재료명 전체, 영양성분표 수치, 알레르기 유발물질, 주의사항, 보관방법 등)**가 외포장(선물박스)에 토씨 하나 틀리지 않고 100% 동일하게 전이되었는지 전 항목을 낱낱이 대조하십시오. 하나라도 누락되거나 다르면 부적합 처리하십시오.
+   - **[내용량 산식 검증]**: 외포장의 '총 내용량' 및 '총 열량'은 반드시 (단일 팩 내용량/열량 × 팩 갯수)로 한 치의 오차 없이 표기되어야 함을 계산하여 검증하십시오. (예: 190mL x 16팩)
 ---
 """
 
 def main():
     st.set_page_config(page_title="식품 QC 마스터", page_icon="🏭", layout="wide")
-    st.title("🏭 식품 표시사항 정밀 검토 (V6.50 - 선물세트 패치판)")
+    st.title("🏭 식품 표시사항 정밀 검토 (V6.51 - 선물세트 전수 대조판)")
     st.markdown("---")
 
     c_type, c_mode = st.columns(2)
     with c_type:
         product_type = st.radio("📌 1. 식품유형 선택", ("특수의료용도식품 / 환자식", "일반식품"))
     with c_mode:
-        # [신규 기능] 모드 선택 버튼
-        inspection_mode = st.radio("📌 2. 검토 모드 선택", ("단품(개별 팩) 검토", "선물세트(외포장/번들) 교차 검토"))
+        # [모드 선택 버튼]
+        inspection_mode = st.radio("📌 2. 검토 모드 선택", ("단품(개별 팩) 검토", "선물세트(외포장/번들) 100% 일치 교차 검토"))
     
     st.markdown("---")
 
-    # [UI] 시안 업로드 (기존 동일)
+    # [UI] 시안 업로드
     st.subheader("🎨 3. 시안 이미지 (주표시면/정보표시면/영양정보/기타면)")
     c1, c2, c3, c4 = st.columns(4)
-    with c1: img_main = st.file_uploader("주표시면(앞면)", type=["jpg", "png", "jpeg"], key="img_main")
-    with c2: img_info = st.file_uploader("정보표시면(뒷면)", type=["jpg", "png", "jpeg"], key="img_info")
-    with c3: img_nutri = st.file_uploader("영양성분표", type=["jpg", "png", "jpeg"], key="img_nutri")
-    with c4: img_extra = st.file_uploader("기타면/측면", type=["jpg", "png", "jpeg"], key="img_extra")
+    with c1: img_main = st.file_uploader("외포장 주표시면 (또는 단품 앞면)", type=["jpg", "png", "jpeg"], key="img_main")
+    with c2: img_info = st.file_uploader("외포장 정보표시면 (또는 단품 뒷면)", type=["jpg", "png", "jpeg"], key="img_info")
+    with c3: img_nutri = st.file_uploader("외포장 영양성분표 (또는 단품 영양정보)", type=["jpg", "png", "jpeg"], key="img_nutri")
+    with c4: img_extra = st.file_uploader("내포장(단일 팩) 전체 시안 (교차 대조용)", type=["jpg", "png", "jpeg"], key="img_extra")
 
     st.markdown("---")
-    # [UI] 서류 업로드 (기존 동일)
+    # [UI] 서류 업로드
     st.subheader("📄 4. 증빙 서류 (성적서/배합비/한글라벨)")
     d1, d2, d3 = st.columns(3)
     with d1: report_docs = st.file_uploader("시험성적서", type=["pdf", "jpg", "png"], accept_multiple_files=True)
@@ -235,8 +235,8 @@ def main():
         
         ## 2️⃣ [원재료명 및 원산지 대조]
         - 결론: (✅ 또는 🚨)
-        - 🚨 [긴급 차단 명령1]: 서류가 없으면 표를 생략하고 "🚨 서류 미제공으로 대조 불가" 한 줄만 출력하십시오. 비타민 무한 반복 등 환각 절대 금지.
-        - 🚨 [긴급 차단 명령2]: 대두레시틴, 카라기난 등 [표 4] 6대 용도 외 첨가물의 용도명 병기를 지적하지 마십시오.
+        - 🚨 [긴급 차단 명령1]: 서류가 없으면 상상하지 말고 "🚨 서류 미제공으로 대조 불가" 한 줄만 출력하십시오.
+        - 🚨 [긴급 차단 명령2]: 향료는 향미증진제가 아닙니다. 대두레시틴, 카라기난, 향료 등 [표 4] 6대 용도 외 첨가물의 용도명 병기를 절대 지적하지 마십시오.
         | No | 원재료명 | 함량 | 서류 일치 | 판정 |
         |---|---|---|---|---|
         
@@ -249,9 +249,9 @@ def main():
         ## 5️⃣ [기타 법적 의무사항]
         - 결론: (✅ 또는 🚨)
         
-        ## 6️⃣ [외포장(선물세트) 전용 교차 검증]
+        ## 6️⃣ [외포장(선물세트) 전수 대조 결과]
         - 결론: (✅ 또는 🚨)
-        - 내용: (Rule 47 적용. 단품 검토 모드일 경우 "선택 안됨 - 해당 없음"으로 기재. 선물세트 모드일 경우 총 내용량 산식(팩당 용량 x 갯수) 및 알레르기 전이 여부 정밀 보고)
+        - 내용: (Rule 47 적용. 단품 모드 시 "해당 없음" 기재. 선물세트 모드 시: 내포장과 외포장의 원재료명, 영양성분, 제품명 등 전 항목이 100% 동일한지, 그리고 '총 내용량(팩당 용량 x 갯수)' 산식이 정확한지 낱낱이 대조하여 보고할 것)
         
         ## 7️⃣ [종합의견 및 즉시 수정 지시사항]
         """
@@ -278,11 +278,11 @@ def main():
                     time.sleep(1)
                 user_content.append(uploaded)
 
-        with st.spinner(f"47대 룰북 원문 전체 교차 검증 중... [{inspection_mode}]"):
-            if img_main: process_single_file(img_main, "시안_주표시면")
-            if img_info: process_single_file(img_info, "시안_정보표시면")
-            if img_nutri: process_single_file(img_nutri, "시안_영양성분표")
-            if img_extra: process_single_file(img_extra, "시안_기타면(또는 내포장시안)")
+        with st.spinner(f"47대 룰북 원문 100% 적용 검증 중... [{inspection_mode}]"):
+            if img_main: process_single_file(img_main, "시안_외포장_주표시면")
+            if img_info: process_single_file(img_info, "시안_외포장_정보표시면")
+            if img_nutri: process_single_file(img_nutri, "시안_외포장_영양성분표")
+            if img_extra: process_single_file(img_extra, "시안_내포장_단품시안전체")
             if report_docs: 
                 for f in report_docs: process_single_file(f, "근거_성적서")
             if recipe_docs:
@@ -291,7 +291,6 @@ def main():
                 for f in legal_docs: process_single_file(f, "근거_법적서류")
 
             try:
-                # 모드(inspection_mode) 변수도 함께 전달
                 result_text = process_qc(product_type, inspection_mode, None)
                 st.markdown(result_text)
             except Exception as e: 
