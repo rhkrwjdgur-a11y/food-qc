@@ -222,7 +222,7 @@ def main():
     """
     st.markdown(print_css, unsafe_allow_html=True)
 
-    st.title("🏭 식품 표시사항 정밀 검토 (V6.64 - 원액 기만 차단 & 영양계산 완벽판)")
+    st.title("🏭 식품 표시사항 정밀 검토 (V6.65 - 안전필터 해제 및 안정화판)")
     st.markdown("<hr class='hide-on-print'>", unsafe_allow_html=True)
 
     c_type, c_mode = st.columns(2)
@@ -261,7 +261,14 @@ def main():
     def process_qc(ptype, imode, content_hashes):
         model = genai.GenerativeModel(MODEL_NAME, system_instruction=SYSTEM_PROMPT)
         
-        # 🚨 [사용자님 요청 반영 핵심 패치] : 4번 목차 영양계산 하한선 철폐 및 0표시 족쇄 추가
+        # 🚨 [신규 추가] AI가 규제 용어를 차단하지 못하도록 모든 안전 필터(Safety Settings) 완전 해제
+        safety_settings = [
+            {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_NONE"},
+            {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_NONE"},
+            {"category": "HARM_CATEGORY_SEXUALLY_EXPLICIT", "threshold": "BLOCK_NONE"},
+            {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_NONE"}
+        ]
+
         final_prompt = f"""
         [제품유형]: {ptype}
         [검토모드]: {imode}
@@ -301,7 +308,13 @@ def main():
         
         ## 7️⃣ [종합의견 및 즉시 수정 지시사항]
         """
-        response = model.generate_content(user_content + [final_prompt], generation_config=genai.types.GenerationConfig(temperature=0.0))
+        
+        # 모델 호출 시 safety_settings 파라미터 적용
+        response = model.generate_content(
+            user_content + [final_prompt], 
+            generation_config=genai.types.GenerationConfig(temperature=0.0),
+            safety_settings=safety_settings
+        )
         return response.text
 
     if st.button("🔍 전수 룰 QC 시작", type="primary"):
