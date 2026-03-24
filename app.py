@@ -188,21 +188,23 @@ SYSTEM_PROMPT = """당신은 대한민국 최고의 '식품 표시사항 법규 
 """
 
 def main():
-    st.set_page_config(page_title="식품 QC 마스터", page_icon="🏭", layout="wide")
-    st.title("🏭 식품 표시사항 정밀 검토 (V6.38 - 46대 룰 무삭제판)")
-    
-    product_type = st.radio("📌 식품유형 선택", ("특수의료용도식품 / 환자식", "일반식품"))
+    st.set_page_config(page_title="식품 QC 마스터 V6.39", page_icon="🏭", layout="wide")
+    st.title("🏭 식품 표시사항 정밀 검토 (V6.39 - UI 고정판)")
 
-    # 시안 및 서류 업로드
-    st.subheader("🎨 시안 및 서류 업로드")
-    u1, u2 = st.columns(2)
-    with u1:
-        img_main = st.file_uploader("주표시면(앞면)", type=["jpg", "png", "jpeg"])
-        img_info = st.file_uploader("정보표시면(뒷면)", type=["jpg", "png", "jpeg"])
-    with u2:
-        recipe_docs = st.file_uploader("배합비 / 레시피", type=["pdf", "csv", "jpg", "png"], accept_multiple_files=True)
-        legal_docs = st.file_uploader("원료라벨 / 품목보고서", type=["pdf", "jpg", "png"], accept_multiple_files=True)
+    # 1. 시안 업로드 구성 (4개 고정)
+    st.subheader("🎨 2. 시안 이미지 (주/정/영/기)")
+    c1, c2, c3, c4 = st.columns(4)
+    with c1: img_main = st.file_uploader("주표시면(앞면)", type=["jpg", "png", "jpeg"])
+    with c2: img_info = st.file_uploader("정보표시면(뒷면)", type=["jpg", "png", "jpeg"])
+    with c3: img_nutri = st.file_uploader("영양정보", type=["jpg", "png", "jpeg"])
+    with c4: img_extra = st.file_uploader("기타면", type=["jpg", "png", "jpeg"])
 
+    # 2. 서류 업로드 구성 (3개 고정)
+    st.subheader("📄 3. 증빙 서류 (성/배/한)")
+    d1, d2, d3 = st.columns(3)
+    with d1: report_docs = st.file_uploader("성적서 (시험성적서)", type=["pdf", "jpg", "png"], accept_multiple_files=True)
+    with d2: recipe_docs = st.file_uploader("배합비 (레시피)", type=["pdf", "csv", "jpg", "png"], accept_multiple_files=True)
+    with d3: legal_docs = st.file_uploader("한글라벨 (원료라벨/품목보고서)", type=["pdf", "jpg", "png"], accept_multiple_files=True)
     @st.cache_data(show_spinner=False)
     def process_qc(product_type, _user_content):
         model = genai.GenerativeModel(MODEL_NAME, system_instruction=SYSTEM_PROMPT)
