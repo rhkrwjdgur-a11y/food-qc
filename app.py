@@ -83,7 +83,7 @@ SYSTEM_PROMPT = """당신은 대한민국 최고의 '식품 표시사항 법규 
 🔥 **Rule 13. [알레르기 '~함유' 키워드 텍스트 정밀 추적]**
    - 음영 박스나 배경색 인식 오류를 방지하기 위해, 시각적 형태가 아닌 **"~함유"** (예: 대두, 밀 함유)라는 텍스트 키워드를 문서 전체에서 추적하십시오. 
 
-🔥 **Rule 14. [표 4 의무 첨가물 용도명 병기 (6대 용도 한정 및 오지랖/환각 금지)]**
+🔥 **Rule 14. [표 4 의무 첨가물 용도명 병기 (6대 용도 한정 및 오지랖 금지)]**
    - **[🚨핵심 명령]**: 「식품등의 표시기준」 [표 4]에 명시된 딱 6가지 용도(감미료, 발색제, 보존료, 산화방지제, 착색료, 향미증진제)에 대해서만 용도명을 병기하라고 요구하십시오.
    - **[🚨환각 및 오지랖 절대 금지]**: '향료'는 '향미증진제'가 아닙니다. AI가 자의적으로 향료를 향미증진제로 둔갑시켜 괄호를 요구하는 헛소리를 절대 금지합니다. 대두레시틴, 카라기난, 탄산수소나트륨 등 6대 용도에 속하지 않는 첨가물에 대해 용도명을 적으라고 지적하는 행위를 100% 금지합니다.
 
@@ -191,29 +191,33 @@ SYSTEM_PROMPT = """당신은 대한민국 최고의 '식품 표시사항 법규 
 
 def main():
     st.set_page_config(page_title="식품 QC 마스터", page_icon="🏭", layout="wide")
-    st.title("🏭 식품 표시사항 정밀 검토 (V6.51 - 선물세트 전수 대조판)")
+    st.title("🏭 식품 표시사항 정밀 검토 (V6.52 - 내/외포장 분리판)")
     st.markdown("---")
 
     c_type, c_mode = st.columns(2)
     with c_type:
         product_type = st.radio("📌 1. 식품유형 선택", ("특수의료용도식품 / 환자식", "일반식품"))
     with c_mode:
-        # [모드 선택 버튼]
         inspection_mode = st.radio("📌 2. 검토 모드 선택", ("단품(개별 팩) 검토", "선물세트(외포장/번들) 100% 일치 교차 검토"))
     
     st.markdown("---")
 
-    # [UI] 시안 업로드
-    st.subheader("🎨 3. 시안 이미지 (주표시면/정보표시면/영양정보/기타면)")
+    # [UI] 시안 업로드 (외포장/단품 메인 디자인용)
+    st.subheader("🎨 3. 본 시안 이미지 (외포장 또는 단품)")
     c1, c2, c3, c4 = st.columns(4)
-    with c1: img_main = st.file_uploader("외포장 주표시면 (또는 단품 앞면)", type=["jpg", "png", "jpeg"], key="img_main")
-    with c2: img_info = st.file_uploader("외포장 정보표시면 (또는 단품 뒷면)", type=["jpg", "png", "jpeg"], key="img_info")
-    with c3: img_nutri = st.file_uploader("외포장 영양성분표 (또는 단품 영양정보)", type=["jpg", "png", "jpeg"], key="img_nutri")
-    with c4: img_extra = st.file_uploader("내포장(단일 팩) 전체 시안 (교차 대조용)", type=["jpg", "png", "jpeg"], key="img_extra")
+    with c1: img_main = st.file_uploader("주표시면(앞면)", type=["jpg", "png", "jpeg"], key="img_main")
+    with c2: img_info = st.file_uploader("정보표시면(뒷면)", type=["jpg", "png", "jpeg"], key="img_info")
+    with c3: img_nutri = st.file_uploader("영양성분표", type=["jpg", "png", "jpeg"], key="img_nutri")
+    with c4: img_extra = st.file_uploader("기타면/측면", type=["jpg", "png", "jpeg"], key="img_extra")
+
+    # [UI] 내포장 시안 분리 (선물세트 모드 시 필수)
+    st.markdown("---")
+    st.subheader("🎁 4. 내포장(개별 팩) 시안 (선물세트 교차 검토용)")
+    img_inner_pack = st.file_uploader("내포장 전체 시안 (외포장과 내용 일치 대조용)", type=["jpg", "png", "jpeg"], accept_multiple_files=True, key="img_inner_pack")
 
     st.markdown("---")
     # [UI] 서류 업로드
-    st.subheader("📄 4. 증빙 서류 (성적서/배합비/한글라벨)")
+    st.subheader("📄 5. 증빙 서류 (성적서/배합비/한글라벨)")
     d1, d2, d3 = st.columns(3)
     with d1: report_docs = st.file_uploader("시험성적서", type=["pdf", "jpg", "png"], accept_multiple_files=True)
     with d2: recipe_docs = st.file_uploader("배합비 / 레시피", type=["pdf", "csv", "jpg", "png"], accept_multiple_files=True)
@@ -251,7 +255,7 @@ def main():
         
         ## 6️⃣ [외포장(선물세트) 전수 대조 결과]
         - 결론: (✅ 또는 🚨)
-        - 내용: (Rule 47 적용. 단품 모드 시 "해당 없음" 기재. 선물세트 모드 시: 내포장과 외포장의 원재료명, 영양성분, 제품명 등 전 항목이 100% 동일한지, 그리고 '총 내용량(팩당 용량 x 갯수)' 산식이 정확한지 낱낱이 대조하여 보고할 것)
+        - 내용: (Rule 47 적용. 단품 모드 시 "해당 없음" 기재. 선물세트 모드 시: 업로드된 '내포장(개별 팩) 시안'과 외포장의 원재료명, 영양성분, 제품명, 주의사항 등 전 항목이 100% 동일한지, 그리고 '총 내용량(팩당 용량 x 갯수)' 산식이 정확한지 낱낱이 대조하여 보고할 것)
         
         ## 7️⃣ [종합의견 및 즉시 수정 지시사항]
         """
@@ -260,8 +264,8 @@ def main():
 
     # [버튼 로직]
     if st.button("🔍 전수 룰 QC 시작", type="primary"):
-        # 파일 미업로드 시 방어 로직
-        if not (img_main or img_info or img_nutri or img_extra or report_docs or recipe_docs or legal_docs):
+        # 파일 미업로드 시 방어 로직 (내포장 시안 포함)
+        if not (img_main or img_info or img_nutri or img_extra or img_inner_pack or report_docs or recipe_docs or legal_docs):
             st.warning("🚨 검토할 시안이나 서류 파일을 최소 1개 이상 업로드해주세요!")
             st.stop()
 
@@ -282,7 +286,10 @@ def main():
             if img_main: process_single_file(img_main, "시안_외포장_주표시면")
             if img_info: process_single_file(img_info, "시안_외포장_정보표시면")
             if img_nutri: process_single_file(img_nutri, "시안_외포장_영양성분표")
-            if img_extra: process_single_file(img_extra, "시안_내포장_단품시안전체")
+            if img_extra: process_single_file(img_extra, "시안_외포장_기타면")
+            # [신규] 내포장 시안 처리 로직
+            if img_inner_pack: 
+                for f in img_inner_pack: process_single_file(f, "시안_내포장(단일팩)_교차검증용")
             if report_docs: 
                 for f in report_docs: process_single_file(f, "근거_성적서")
             if recipe_docs:
