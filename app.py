@@ -30,7 +30,7 @@ else:
 genai.configure(api_key=API_KEY)
 MODEL_NAME = "gemini-2.5-flash" 
 
-# 2. 통합 전문가 프롬프트 (Rule 1~46 완전 전개 무삭제 풀텍스트판)
+# 2. 통합 전문가 프롬프트 (Rule 1~47 완전 전개 풀텍스트판)
 SYSTEM_PROMPT = """당신은 대한민국 최고의 '식품 표시사항 법규 및 품질관리(QC) 전문가'입니다.
 모든 검토 결과의 결론 앞에는 반드시 ✅(적합) 또는 🚨(부적합) 이모지를 붙이십시오.
 제공된 법령(고시)과 사용자가 업로드한 자료들을 교차 검증하십시오. 당신의 판단은 100% 일관되어야 하며, 임의로 수치를 지어내거나 계산을 건너뛰는 행위(환각)를 엄격히 금지합니다. 
@@ -38,7 +38,7 @@ SYSTEM_PROMPT = """당신은 대한민국 최고의 '식품 표시사항 법규 
 ---
 # [식품 패키지 표시사항 QC 자동화 검수 시스템 룰북]
 
-## ⚠️ 검토 대원칙: 46대 특수 지침 (단 한 글자도 생략 없이 엄수할 것)
+## ⚠️ 검토 대원칙: 47대 특수 지침 (단 한 글자도 생략 없이 엄수할 것)
 
 ✅ **Rule 1. 원산지 3순위 산정 제외 및 생략 합법성 (철저 준수)**
    - 정제수(물), 주정, 당류, 그리고 모든 식품첨가물은 배합비율이 아무리 높아도 원산지 표시 대상 3순위 카운트에서 100% 제외됩니다.
@@ -97,7 +97,7 @@ SYSTEM_PROMPT = """당신은 대한민국 최고의 '식품 표시사항 법규 
    - 시안에 '無첨가' 강조 문구가 보이면 해당 식품유형별 첨가물공전 사용기준을 스스로 대입하십시오. 애초에 법적으로 사용이 원천 금지된 첨가물을 뺐다고 강조했다면 '기만광고(🚨부적합)'로 처리하십시오.
 
 ✅ **Rule 18. [영유아 타겟 명칭 금지]**
-   - 특수용도식품으로 허가받지 않은 일반 식품의 제품명이나 광고에 '유아, 영아, 베이비, 아기' 등의 단어를 사용하여 영유아용으로 오인하게 만드는 행위를 적발하십시오.
+   - 일반 식품의 제품명이나 광고에 '유아, 영아, 베이비, 아기' 등의 단어를 사용하여 영유아용으로 오인하게 만드는 행위를 적발하십시오.
 
 ✅ **Rule 19. ['무당(Zero)' vs '무가당(무첨가)' 절대 분리]**
    - '무당(Zero)'은 영양성분표 기준 100g당 당류가 0.5g 미만일 때만 합법입니다. '무가당'은 인위적 당류 첨가가 없어야 합법입니다.
@@ -160,7 +160,7 @@ SYSTEM_PROMPT = """당신은 대한민국 최고의 '식품 표시사항 법규 
    - 원재료명 본문에 함유되어 있다고 명시된 실제 투입 원료를 '제조시설 공유' 경고 문구 목록에 또 중복 기재하는 것은 명백한 위반입니다.
 
 ✅ **Rule 39. [동명 원료 교차 혼선 금지 및 종속성 원칙]**
-   - 동일한 원재료가 복합원재료 A와 B에 각각 들어갔을 때, 헷갈리지 말고 서류 구조 그대로 독립적으로 검증하십시오.
+   - 동일한 원재료가 복합원재료 A와 B에 각각 들어갔을 때, 헷갈리지 말고 독립적으로 검증하십시오.
 
 ✅ **Rule 40. [열량 5kcal 단위 반올림 절대 우선의 원칙]**
    - 열량 검토 시 120% 오차율을 계산하기 전, 실측값을 '가장 가까운 5kcal 단위'로 반올림한 값을 먼저 구하여 시안과 대조하십시오.
@@ -169,32 +169,42 @@ SYSTEM_PROMPT = """당신은 대한민국 최고의 '식품 표시사항 법규 
    - 1일 영양성분 기준치에 대한 비율(%)은 오직 (시안 표시량 ÷ 식약처 기준치) × 100 으로만 도출하여 검증하십시오.
 
 ✅ **Rule 42. [완제품 vs 원료 서류 혼동 절대 금지]**
-   - 영양표시 검증에는 반드시 개별 원료가 아닌 완제품 시험성적서만 사용하십시오.
+   - 영양표시 검증에는 반드시 완제품 시험성적서만 사용하십시오.
 
 ✅ **Rule 43. [시각적 오독(OCR) 철통 방어]**
-   - 글자가 작아 확신할 수 없으면 섣불리 누락 지적을 하지 말고 반드시 "육안 재확인 요망"으로 보류 처리하십시오.
+   - 글자가 작아 확신할 수 없으면 반드시 "육안 재확인 요망"으로 보류 처리하십시오.
 
 ✅ **Rule 44. [혼합제제 넘버링 및 하위성분 전개 합법성]**
-   - 비타민 혼합제제 등에 포함된 부형제나 희석제(말토덱스트린 등)가 시안에 기재되어 있더라도 구성 성분임이 확인되면 적합 처리하십시오.
+   - 비타민 혼합제제 등에 포함된 부형제나 희석제가 시안에 기재되어 있더라도 구성 성분임이 확인되면 적합 처리하십시오.
 
 ✅ **Rule 45. [전략적 누락 허용 및 유령 성분 검토 금지]**
    - 마케팅적 이유로 강조를 포기(누락)한 것은 자유이므로 지적하지 마십시오.
 
 🔥 **Rule 46. [제품명 '숫자+통칭(예: 17곡)' 강조 시 개별 함량 강제 전개]**
-   - 제품명에 '17곡' 등 숫자가 포함된 명칭을 사용한 경우 합산 표기를 100% 금지합니다. 식약처 FAQ에 따라 N개 하위 원료의 명칭과 함량이 개별 전개되었는지 확인하고, 두류나 종실류의 혼입을 교차 검증하십시오.
+   - 제품명에 '17곡' 등 숫자가 포함된 경우 합산 표기를 100% 금지합니다. N개 하위 원료 명칭과 함량이 개별 전개되었는지 스캔하십시오.
+
+🔥 **Rule 47. [선물용 포장(외포장/아웃박스) 일치성 정밀 검증]**
+   - 선물세트/대포장 모드로 검토 시, 내포장(팩)의 모든 법적 표시사항(원재료명, 알레르기 유발물질, 주의사항 등)이 외포장에 누락 없이 100% 전이되었는지 스캔하십시오.
+   - **[내용량 산식 검증]**: 외포장의 '총 내용량'은 반드시 (단일 팩 내용량 × 팩 갯수)로 한 치의 오차 없이 표기되어야 함을 검증하십시오. (예: 190mL x 16팩)
 ---
 """
 
 def main():
     st.set_page_config(page_title="식품 QC 마스터", page_icon="🏭", layout="wide")
-    st.title("🏭 식품 표시사항 정밀 검토 (V6.49 - 풀텍스트 무삭제판)")
+    st.title("🏭 식품 표시사항 정밀 검토 (V6.50 - 선물세트 패치판)")
     st.markdown("---")
 
-    product_type = st.radio("📌 1. 식품유형 선택", ("특수의료용도식품 / 환자식", "일반식품"))
+    c_type, c_mode = st.columns(2)
+    with c_type:
+        product_type = st.radio("📌 1. 식품유형 선택", ("특수의료용도식품 / 환자식", "일반식품"))
+    with c_mode:
+        # [신규 기능] 모드 선택 버튼
+        inspection_mode = st.radio("📌 2. 검토 모드 선택", ("단품(개별 팩) 검토", "선물세트(외포장/번들) 교차 검토"))
+    
     st.markdown("---")
 
-    # [UI] 시안 업로드
-    st.subheader("🎨 2. 시안 이미지 (주표시면/정보표시면/영양정보/기타면)")
+    # [UI] 시안 업로드 (기존 동일)
+    st.subheader("🎨 3. 시안 이미지 (주표시면/정보표시면/영양정보/기타면)")
     c1, c2, c3, c4 = st.columns(4)
     with c1: img_main = st.file_uploader("주표시면(앞면)", type=["jpg", "png", "jpeg"], key="img_main")
     with c2: img_info = st.file_uploader("정보표시면(뒷면)", type=["jpg", "png", "jpeg"], key="img_info")
@@ -202,31 +212,31 @@ def main():
     with c4: img_extra = st.file_uploader("기타면/측면", type=["jpg", "png", "jpeg"], key="img_extra")
 
     st.markdown("---")
-    # [UI] 서류 업로드
-    st.subheader("📄 3. 증빙 서류 (성적서/배합비/한글라벨)")
+    # [UI] 서류 업로드 (기존 동일)
+    st.subheader("📄 4. 증빙 서류 (성적서/배합비/한글라벨)")
     d1, d2, d3 = st.columns(3)
     with d1: report_docs = st.file_uploader("시험성적서", type=["pdf", "jpg", "png"], accept_multiple_files=True)
     with d2: recipe_docs = st.file_uploader("배합비 / 레시피", type=["pdf", "csv", "jpg", "png"], accept_multiple_files=True)
     with d3: legal_docs = st.file_uploader("원료라벨 / 품목보고서", type=["pdf", "jpg", "png"], accept_multiple_files=True)
 
     @st.cache_data(show_spinner=False)
-    def process_qc(ptype, content_hashes):
+    def process_qc(ptype, imode, content_hashes):
         model = genai.GenerativeModel(MODEL_NAME, system_instruction=SYSTEM_PROMPT)
-        # [환각 방지, 이모지 강제 및 표 4 오지랖 금지 탑재]
         final_prompt = f"""
         [제품유형]: {ptype}
+        [검토모드]: {imode}
         
         🚨 [출력 형식 강제 명령] 🚨
         모든 판단 결과 앞에는 반드시 ✅(적합) 또는 🚨(부적합)을 붙이십시오.
-        아래 목차 형식을 100% 준수하십시오.
+        아래 7단계 목차 형식을 100% 준수하십시오.
 
         ## 1️⃣ [주표시면 및 마케팅 뱃지]
         - 결론: (✅ 또는 🚨)
         
         ## 2️⃣ [원재료명 및 원산지 대조]
         - 결론: (✅ 또는 🚨)
-        - 🚨 [긴급 차단 명령1]: '배합비'나 '원료 서류'가 없다면, 절대 시안에서 억지로 추출하거나 상상하지 마십시오. 비타민 무한 반복 등 환각을 금지합니다. 서류가 없으면 표를 생략하고 "🚨 서류 미제공으로 대조 불가" 한 줄만 출력하십시오.
-        - 🚨 [긴급 차단 명령2]: 대두레시틴, 카라기난 등 [표 4] 6대 용도 외 첨가물의 용도명 병기를 지적하는 행위를 절대 금지합니다.
+        - 🚨 [긴급 차단 명령1]: 서류가 없으면 표를 생략하고 "🚨 서류 미제공으로 대조 불가" 한 줄만 출력하십시오. 비타민 무한 반복 등 환각 절대 금지.
+        - 🚨 [긴급 차단 명령2]: 대두레시틴, 카라기난 등 [표 4] 6대 용도 외 첨가물의 용도명 병기를 지적하지 마십시오.
         | No | 원재료명 | 함량 | 서류 일치 | 판정 |
         |---|---|---|---|---|
         
@@ -239,7 +249,11 @@ def main():
         ## 5️⃣ [기타 법적 의무사항]
         - 결론: (✅ 또는 🚨)
         
-        ## 6️⃣ [종합의견 및 즉시 수정 지시사항]
+        ## 6️⃣ [외포장(선물세트) 전용 교차 검증]
+        - 결론: (✅ 또는 🚨)
+        - 내용: (Rule 47 적용. 단품 검토 모드일 경우 "선택 안됨 - 해당 없음"으로 기재. 선물세트 모드일 경우 총 내용량 산식(팩당 용량 x 갯수) 및 알레르기 전이 여부 정밀 보고)
+        
+        ## 7️⃣ [종합의견 및 즉시 수정 지시사항]
         """
         response = model.generate_content(user_content + [final_prompt], generation_config=genai.types.GenerationConfig(temperature=0.0))
         return response.text
@@ -264,11 +278,11 @@ def main():
                     time.sleep(1)
                 user_content.append(uploaded)
 
-        with st.spinner("46대 룰북 원문 전체 교차 검증 중..."):
+        with st.spinner(f"47대 룰북 원문 전체 교차 검증 중... [{inspection_mode}]"):
             if img_main: process_single_file(img_main, "시안_주표시면")
             if img_info: process_single_file(img_info, "시안_정보표시면")
             if img_nutri: process_single_file(img_nutri, "시안_영양성분표")
-            if img_extra: process_single_file(img_extra, "시안_기타면")
+            if img_extra: process_single_file(img_extra, "시안_기타면(또는 내포장시안)")
             if report_docs: 
                 for f in report_docs: process_single_file(f, "근거_성적서")
             if recipe_docs:
@@ -277,8 +291,8 @@ def main():
                 for f in legal_docs: process_single_file(f, "근거_법적서류")
 
             try:
-                # content_hashes 자리에 None을 넘겨 캐시 충돌 방지
-                result_text = process_qc(product_type, None)
+                # 모드(inspection_mode) 변수도 함께 전달
+                result_text = process_qc(product_type, inspection_mode, None)
                 st.markdown(result_text)
             except Exception as e: 
                 st.error(f"🚨 오류: {e}")
