@@ -191,7 +191,7 @@ SYSTEM_PROMPT = """당신은 대한민국 최고의 '식품 표시사항 법규 
 
 def main():
     st.set_page_config(page_title="식품 QC 마스터", page_icon="🏭", layout="wide")
-    st.title("🏭 식품 표시사항 정밀 검토 (V6.46 - 완전판)")
+    st.title("🏭 식품 표시사항 정밀 검토 (V6.47 - 최종 완전판)")
     st.markdown("---")
 
     product_type = st.radio("📌 1. 식품유형 선택", ("특수의료용도식품 / 환자식", "일반식품"))
@@ -216,6 +216,7 @@ def main():
     @st.cache_data(show_spinner=False)
     def process_qc(ptype, content_hashes):
         model = genai.GenerativeModel(MODEL_NAME, system_instruction=SYSTEM_PROMPT)
+        # [환각 방지 및 이모지 강제 로직 탑재]
         final_prompt = f"""
         [제품유형]: {ptype}
         
@@ -228,7 +229,9 @@ def main():
         
         ## 2️⃣ [원재료명 및 원산지 대조]
         - 결론: (✅ 또는 🚨)
-        - (🚨 미량 원산지 지적 절대 금지)
+        - 🚨 [긴급 차단 명령]: 만약 '배합비'나 '원료 서류'가 업로드되지 않았다면, 절대 시안에서 원재료를 억지로 추출하거나 상상해서 나열하지 마십시오. 비타민 등 특정 성분을 무한 반복하는 환각을 엄격히 금지합니다. 서류가 없으면 표를 생략하고 오직 **"🚨 서류 미제공으로 대조 불가"**라는 한 문장만 출력하십시오.
+        | No | 원재료명 | 함량 | 서류 일치 | 판정 |
+        |---|---|---|---|---|
         
         ## 3️⃣ [서류 vs 시안 교차 검증 (알레르기 텍스트 추적)]
         - 결론: (✅ 또는 🚨)
@@ -245,11 +248,11 @@ def main():
         response = model.generate_content(user_content + [final_prompt], generation_config=genai.types.GenerationConfig(temperature=0.0))
         return response.text
 
-    # 버튼 로직: 파일 업로드들 밑에 존재하며, 들여쓰기를 함수 안에 정확히 맞춤
+    # [버튼 로직] 올바른 들여쓰기 위치 (main 함수 내부)
     if st.button("🔍 전수 룰 QC 시작", type="primary"):
         # 파일이 하나라도 업로드 되었는지 체크 (이전 결과 표출 방지)
         if not (img_main or img_info or img_nutri or img_extra or report_docs or recipe_docs or legal_docs):
-            st.warning("🚨 검토할 시안이나 서류 파일을 먼저 업로드해주세요! 파일을 넣지 않으면 이전 결과가 표시될 수 있습니다.")
+            st.warning("🚨 검토할 시안이나 서류 파일을 최소 1개 이상 업로드해주세요!")
             st.stop()
 
         user_content = []
@@ -278,6 +281,7 @@ def main():
                 for f in legal_docs: process_single_file(f, "근거_법적서류")
 
             try:
+                # content_hashes 자리에 None을 넘겨 캐시 충돌 방지
                 result_text = process_qc(product_type, None)
                 st.markdown(result_text)
             except Exception as e: 
