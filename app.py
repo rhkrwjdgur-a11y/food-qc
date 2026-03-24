@@ -205,29 +205,20 @@ def main():
     with d1: report_docs = st.file_uploader("성적서 (시험성적서)", type=["pdf", "jpg", "png"], accept_multiple_files=True)
     with d2: recipe_docs = st.file_uploader("배합비 (레시피)", type=["pdf", "csv", "jpg", "png"], accept_multiple_files=True)
     with d3: legal_docs = st.file_uploader("한글라벨 (원료라벨/품목보고서)", type=["pdf", "jpg", "png"], accept_multiple_files=True)
+
     @st.cache_data(show_spinner=False)
-    def process_qc(product_type, _user_content):
+    def process_qc(_user_content):
         model = genai.GenerativeModel(MODEL_NAME, system_instruction=SYSTEM_PROMPT)
-        final_prompt = f"""
-        [검토 유형]: {product_type}
-        
+        final_prompt = """
+        [보고서 고정 형식]
         ## 1️⃣ [주표시면 검토]
         - 결론: 
-        - 내용: (Rule 46 숫자 강조 여부 포함)
-        
         ## 2️⃣ [원재료명 및 원산지 대조]
-        - 결론: 
-        - 내용: (🚨상위 3순위가 아닌 미량 원료의 원산지 지적 절대 금지)
-        | No | 원재료명 | 함량 | 서류 일치 | 판정 |
-        |---|---|---|---|---|
-        
+        - 결론: (🚨미량 원료 원산지 지적 금지)
         ## 3️⃣ [알레르기 표시 검토]
-        - 결론: 
-        - 내용: (Rule 13 '~함유' 텍스트 추적 결과)
-        
+        - 결론: ('~함유' 텍스트 기준)
         ## 4️⃣ [영양표시 및 기타]
         - 결론: 
-        
         ## 5️⃣ [종합의견 및 수정 지시사항]
         """
         response = model.generate_content(_user_content + [final_prompt], generation_config=genai.types.GenerationConfig(temperature=0.0))
@@ -245,15 +236,19 @@ def main():
                     while uploaded.state.name == "PROCESSING": time.sleep(1)
                     user_content.append(uploaded)
 
-        with st.spinner("46대 룰북 전체 가동 중..."):
-            add_f(img_main, "시안_앞"); add_f(img_info, "시안_뒤")
+        with st.spinner("사용자님의 고정 설정으로 검토 중..."):
+            add_f(img_main, "시안_주표시면"); add_f(img_info, "시안_정보표시면")
+            add_f(img_nutri, "시안_영양정보"); add_f(img_extra, "시안_기타면")
+            if report_docs: [add_f(f, "근거_성적서") for f in report_docs]
             if recipe_docs: [add_f(f, "근거_배합비") for f in recipe_docs]
-            if legal_docs: [add_f(f, "근거_법적서류") for f in legal_docs]
+            if legal_docs: [add_f(f, "근거_한글라벨") for f in legal_docs]
 
             try:
-                st.markdown(process_qc(product_type, user_content))
+                st.markdown(process_qc(user_content))
             except Exception as e: st.error(f"오류: {e}")
             finally: [os.remove(f) for f in glob.glob("temp_*")]
 
+if __name__ == "__main__":
+    if check_password(): main()
 if __name__ == "__main__":
     if check_password(): main()
