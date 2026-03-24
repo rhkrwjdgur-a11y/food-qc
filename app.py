@@ -83,7 +83,7 @@ SYSTEM_PROMPT = """당신은 대한민국 최고의 '식품 표시사항 법규 
 🔥 **Rule 13. [알레르기 '~함유' 키워드 텍스트 정밀 추적]**
    - 음영 박스나 배경색 인식 오류를 방지하기 위해, 시각적 형태가 아닌 **"~함유"** (예: 대두, 밀 함유)라는 텍스트 키워드를 문서 전체에서 추적하십시오. 
 
-🔥 **Rule 14. [표 4 의무 첨가물 용도명 병기 (6대 용도 한정 및 오지랖/환각 금지)]**
+🔥 **Rule 14. [표 4 의무 첨가물 용도명 병기 (6대 용도 한정 및 오지랖 금지)]**
    - **[🚨핵심 명령]**: 「식품등의 표시기준」 [표 4]에 명시된 딱 6가지 용도(감미료, 발색제, 보존료, 산화방지제, 착색료, 향미증진제)에 대해서만 용도명을 병기하라고 요구하십시오.
    - **[🚨환각 및 오지랖 절대 금지]**: '향료'는 '향미증진제'가 아닙니다. AI가 자의적으로 향료를 향미증진제로 둔갑시켜 괄호를 요구하는 헛소리를 절대 금지합니다. 대두레시틴, 카라기난, 탄산수소나트륨 등 6대 용도에 속하지 않는 첨가물에 대해 용도명을 적으라고 지적하는 행위를 100% 금지합니다.
 
@@ -191,7 +191,7 @@ SYSTEM_PROMPT = """당신은 대한민국 최고의 '식품 표시사항 법규 
 
 def main():
     st.set_page_config(page_title="식품 QC 마스터", page_icon="🏭", layout="wide")
-    st.title("🏭 식품 표시사항 정밀 검토 (V6.54 - 내/외포장 4분할 교차검증판)")
+    st.title("🏭 식품 표시사항 정밀 검토 (V6.55 - 동적 UI 최적화판)")
     st.markdown("---")
 
     c_type, c_mode = st.columns(2)
@@ -202,26 +202,30 @@ def main():
     
     st.markdown("---")
 
-    # [UI] 3. 외포장(본 시안) 업로드
-    st.subheader("🎨 3. 외포장(선물박스) 또는 단품 시안")
+    # [UI] 3. 본 시안 (외포장 또는 단품) 업로드
+    st.subheader("🎨 3. 본 시안 이미지 (외포장 또는 단품)")
     c1, c2, c3, c4 = st.columns(4)
-    with c1: img_main = st.file_uploader("외포장 주표시면(앞면)", type=["jpg", "png", "jpeg"], key="img_main")
-    with c2: img_info = st.file_uploader("외포장 정보표시면(뒷면)", type=["jpg", "png", "jpeg"], key="img_info")
-    with c3: img_nutri = st.file_uploader("외포장 영양성분표", type=["jpg", "png", "jpeg"], key="img_nutri")
-    with c4: img_extra = st.file_uploader("외포장 기타면/측면", type=["jpg", "png", "jpeg"], key="img_extra")
+    with c1: img_main = st.file_uploader("주표시면(앞면)", type=["jpg", "png", "jpeg"], key="img_main")
+    with c2: img_info = st.file_uploader("정보표시면(뒷면)", type=["jpg", "png", "jpeg"], key="img_info")
+    with c3: img_nutri = st.file_uploader("영양성분표", type=["jpg", "png", "jpeg"], key="img_nutri")
+    with c4: img_extra = st.file_uploader("기타면/측면", type=["jpg", "png", "jpeg"], key="img_extra")
 
-    # [UI] 4. 내포장(개별 팩) 4분할 업로드
-    st.markdown("---")
-    st.subheader("🎁 4. 내포장(개별 팩) 시안 (선물세트 대조 시 필수)")
-    ic1, ic2, ic3, ic4 = st.columns(4)
-    with ic1: img_inner_main = st.file_uploader("내포장 주표시면", type=["jpg", "png", "jpeg"], key="inner_main")
-    with ic2: img_inner_info = st.file_uploader("내포장 정보표시면", type=["jpg", "png", "jpeg"], key="inner_info")
-    with ic3: img_inner_nutri = st.file_uploader("내포장 영양성분표", type=["jpg", "png", "jpeg"], key="inner_nutri")
-    with ic4: img_inner_extra = st.file_uploader("내포장 기타면", type=["jpg", "png", "jpeg"], key="inner_extra")
+    # 변수 초기화 (조건문에 들어가지 않을 때를 대비)
+    img_inner_main = img_inner_info = img_inner_nutri = img_inner_extra = None
+
+    # [UI] 4. 내포장(개별 팩) 4분할 업로드 -> 선물세트 선택 시에만 짠! 하고 나타납니다.
+    if "선물세트" in inspection_mode:
+        st.markdown("---")
+        st.subheader("🎁 4. 내포장(개별 팩) 시안 (선물세트 대조 시 필수)")
+        ic1, ic2, ic3, ic4 = st.columns(4)
+        with ic1: img_inner_main = st.file_uploader("내포장 주표시면", type=["jpg", "png", "jpeg"], key="inner_main")
+        with ic2: img_inner_info = st.file_uploader("내포장 정보표시면", type=["jpg", "png", "jpeg"], key="inner_info")
+        with ic3: img_inner_nutri = st.file_uploader("내포장 영양성분표", type=["jpg", "png", "jpeg"], key="inner_nutri")
+        with ic4: img_inner_extra = st.file_uploader("내포장 기타면", type=["jpg", "png", "jpeg"], key="inner_extra")
 
     st.markdown("---")
-    # [UI] 5. 서류 업로드
-    st.subheader("📄 5. 증빙 서류 (성적서/배합비/한글라벨)")
+    # [UI] 5. 서류 업로드 (번호가 자동으로 4번 혹은 5번으로 인식되도록 구성)
+    st.subheader("📄 증빙 서류 (성적서/배합비/한글라벨)")
     d1, d2, d3 = st.columns(3)
     with d1: report_docs = st.file_uploader("시험성적서", type=["pdf", "jpg", "png"], accept_multiple_files=True)
     with d2: recipe_docs = st.file_uploader("배합비 / 레시피", type=["pdf", "csv", "jpg", "png"], accept_multiple_files=True)
@@ -293,13 +297,13 @@ def main():
                 user_content.append(uploaded)
 
         with st.spinner(f"47대 룰북 원문 100% 적용 검증 중... [{inspection_mode}]"):
-            # 외포장 처리
-            if img_main: process_single_file(img_main, "시안_외포장_주표시면")
-            if img_info: process_single_file(img_info, "시안_외포장_정보표시면")
-            if img_nutri: process_single_file(img_nutri, "시안_외포장_영양성분표")
-            if img_extra: process_single_file(img_extra, "시안_외포장_기타면")
+            # 본 시안 처리
+            if img_main: process_single_file(img_main, "시안_주표시면")
+            if img_info: process_single_file(img_info, "시안_정보표시면")
+            if img_nutri: process_single_file(img_nutri, "시안_영양성분표")
+            if img_extra: process_single_file(img_extra, "시안_기타면")
             
-            # 내포장 4분할 처리
+            # 내포장 4분할 처리 (선물세트 모드 시)
             if img_inner_main: process_single_file(img_inner_main, "시안_내포장_주표시면")
             if img_inner_info: process_single_file(img_inner_info, "시안_내포장_정보표시면")
             if img_inner_nutri: process_single_file(img_inner_nutri, "시안_내포장_영양성분표")
