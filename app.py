@@ -4,6 +4,7 @@ from PIL import Image
 import glob
 import time
 import os
+import re
 
 # ==========================================
 # 🔒 [보안] 시스템 접속 비밀번호 설정
@@ -224,7 +225,7 @@ def main():
     """
     st.markdown(print_css, unsafe_allow_html=True)
 
-    st.title("🏭 식품 표시사항 정밀 검토 (V12.0 - CoT 및 실무 예외 완벽판)")
+    st.title("🏭 식품 표시사항 정밀 검토 (V12.1 - CoT 및 UI 최적화 완료)")
     st.markdown("<hr class='hide-on-print'>", unsafe_allow_html=True)
 
     c_type, c_mode = st.columns(2)
@@ -376,7 +377,23 @@ def main():
 
             try:
                 result_text = process_qc(product_type, inspection_mode, None)
-                st.markdown(result_text)
+                
+                # <thinking> 태그 분리 로직 (UI 최적화)
+                thinking_match = re.search(r'<thinking>(.*?)</thinking>', result_text, re.DOTALL)
+                
+                if thinking_match:
+                    thinking_content = thinking_match.group(1).strip()
+                    report_content = result_text.replace(thinking_match.group(0), "").strip()
+                    
+                    # AI의 사고 과정은 접어두기
+                    with st.expander("🧠 AI의 51대 룰 교차 검증 사고 과정 (클릭하여 보기)"):
+                        st.markdown(f"*{thinking_content}*")
+                    
+                    # 7단계 리포트 본문 출력
+                    st.markdown(report_content)
+                else:
+                    st.markdown(result_text)
+
             except Exception as e: 
                 st.error(f"🚨 오류: {e}")
             finally:
