@@ -11,7 +11,6 @@ import re
 # 🔒 [보안] 시스템 접속 비밀번호 설정
 # ==========================================
 def check_password():
-    """시스템 보안을 위한 비밀번호 체크 함수"""
     def password_entered():
         if st.session_state["password"] == "2082":
             st.session_state["password_correct"] = True
@@ -31,7 +30,6 @@ def check_password():
 # ==========================================
 # 🔑 1. API 키 및 모델 초기화
 # ==========================================
-# Canvas 환경의 API 키를 자동으로 가져오거나 환경 변수에서 참조합니다.
 if "GOOGLE_API_KEY" in st.secrets:
     API_KEY = st.secrets["GOOGLE_API_KEY"]
 else:
@@ -41,9 +39,8 @@ genai.configure(api_key=API_KEY)
 MODEL_NAME = "gemini-2.5-flash" 
 
 # ==========================================
-# 🧮 [Phase 2] Python 식약처 규정 수학 엔진 (Absolute Rule Engine)
+# 🧮 [Phase 2] Python 식약처 규정 수학 엔진
 # ==========================================
-# 1일 영양성분 기준치 (식약처 고시 기준 완벽 세팅)
 DV_DICT = {
     "열량": 2000, "나트륨": 2000, "탄수화물": 324, "당류": 100,
     "지방": 54, "트랜스지방": 0, "포화지방": 15, "콜레스테롤": 300,
@@ -53,11 +50,9 @@ DV_DICT = {
     "엽산": 400, "나이아신": 15, "판토텐산": 5, "바이오틴": 30
 }
 
-# 120% 미만 그룹 (제한 영양소)
 BAD_NUTRIENTS = ["열량", "나트륨", "당류", "지방", "트랜스지방", "포화지방", "콜레스테롤"]
 
 def build_nutrition_table(nutrition_data):
-    """AI가 추출한 원시 데이터를 파이썬이 수학적으로 검증하여 9칸 테이블 생성"""
     if not nutrition_data:
         return "🚨 영양성분 데이터를 추출하지 못했습니다.", False
 
@@ -67,13 +62,11 @@ def build_nutrition_table(nutrition_data):
     all_pass = True
     for nut, values in nutrition_data.items():
         try:
-            # AI가 추출한 문자열 데이터를 숫자로 변환
             report_val = float(str(values.get("report_val", 0)).replace(',', ''))
             converted_val = values.get("converted_val", "-")
             label_val = float(str(values.get("label_val", 0)).replace(',', ''))
             label_pct_str = str(values.get("label_pct", "0%"))
             
-            # 1. 허용오차 기준선 계산 (파이썬이 직접 수행)
             if nut in BAD_NUTRIENTS:
                 margin = round(label_val * 1.2, 2)
                 margin_str = f"{label_val} * 1.2 = {margin} 미만"
@@ -83,7 +76,6 @@ def build_nutrition_table(nutrition_data):
                 margin_str = f"{label_val} * 0.8 = {margin} 이상"
                 is_pass = report_val >= margin
 
-            # 2. 1일 기준치 % 계산 (환각 차단)
             dv_val = DV_DICT.get(nut)
             calc_pct_str = "-"
             dv_str = f"{dv_val}" if dv_val else "N/A"
@@ -91,14 +83,11 @@ def build_nutrition_table(nutrition_data):
             if dv_val and dv_val > 0:
                 calc_pct = round((label_val / dv_val) * 100)
                 calc_pct_str = f"({label_val} / {dv_val}) * 100 = {calc_pct}%"
-                
-                # 시안의 %와 계산된 % 대조
                 label_pct_num = int(re.sub(r'[^0-9]', '', label_pct_str)) if re.sub(r'[^0-9]', '', label_pct_str) else 0
                 if calc_pct != label_pct_num:
                     is_pass = False
                     calc_pct_str = f"🚨 수치 오류 (정답: {calc_pct}%)"
             
-            # 3. 판정
             judgment = "✅ 적합" if is_pass else "🚨 부적합 (수정요망)"
             if not is_pass: all_pass = False
             
@@ -117,7 +106,7 @@ SYSTEM_PROMPT = """당신은 대한민국 최고의 '식품 표시사항 법규 
 
 [51대 룰 핵심 지침]
 1. [특허/원액]: 제조방법 특허를 '특허물질'로 표기했는지, 혼합물 원료에서 '혼합물' 단어를 누락하여 100% 순수물질처럼 기만했는지 스캔하십시오.
-2. [원재료명]: '영양강화제 2종' 등 숫자 묶음 표기는 합법입니다. 향료 뒤 괄호 지적을 금지합니다. 2% 미만 원료 순서 자유를 인정하십시오.
+2. [원재료명]: '영양강화제 2종' 등 숫자 묶음 표기는 합법입니다. 향료 뒤 괄호 지적을 금지합니다.
 3. [알레르기]: 호밀/보리는 밀 알레르기가 아닙니다. '~함유' 텍스트를 정밀 추적하십시오.
 4. [내/외포장]: 내포장(팩)과 외포장(박스)의 소비기한 위치 차이는 합법입니다. 단, 텍스트 란에 '직접 접촉 재질(예: 폴리에틸렌)' 기재 여부를 양쪽 다 확인하십시오.
 
@@ -138,7 +127,6 @@ SYSTEM_PROMPT = """당신은 대한민국 최고의 '식품 표시사항 법규 
 """
 
 def parse_ai_json(text):
-    """AI 출력에서 JSON만 추출"""
     try:
         match = re.search(r'```json\s*(.*?)\s*```', text, re.DOTALL)
         json_str = match.group(1) if match else text
@@ -146,11 +134,7 @@ def parse_ai_json(text):
     except:
         return None
 
-# ==========================================
-# 🖥️ [Phase 3] 7단계 리포트 UI 렌더링
-# ==========================================
 def render_report(data):
-    """JSON 데이터를 7단계 정밀 리포트로 출력"""
     st.markdown("## 1️⃣ [주표시면 및 마케팅 뱃지 판별]")
     s1 = data.get("step1", {})
     st.write(f"- 결론: {s1.get('decision', 'N/A')}")
@@ -194,41 +178,76 @@ def render_report(data):
 # 🚀 메인 앱 로직
 # ==========================================
 def main():
-    st.set_page_config(page_title="식품 QC 마스터 V8.02", layout="wide")
+    st.set_page_config(page_title="식품 QC 마스터 V8.05", layout="wide")
     
-    st.title("🏭 식품 표시사항 정밀 검토 (V8.02 - 하이브리드)")
+    st.title("🏭 식품 표시사항 정밀 검토 (V8.05 - 하이브리드)")
     st.markdown("⚡ AI 데이터 스캔 + Python 수학 엔진 결합")
     st.markdown("<hr>", unsafe_allow_html=True)
 
+    # 1. 유형 및 모드 선택
     c_type, c_mode = st.columns(2)
     with c_type:
         p_type = st.radio("📌 식품유형", ("일반식품", "특수의료용도식품 / 환자식"))
     with c_mode:
-        i_mode = st.radio("📌 검토 모드", ("단품 검토", "선물세트 내/외포장 대조"))
+        i_mode = st.radio("📌 검토 모드", ("단품(개별 팩) 검토", "선물세트(외포장/번들) 100% 일치 교차 검토"))
 
-    st.markdown("### 🎨 파일 업로드")
-    u1, u2, u3 = st.columns(3)
-    with u1: imgs = st.file_uploader("시안 이미지", type=["jpg","png","jpeg"], accept_multiple_files=True)
-    with u2: reps = st.file_uploader("시험성적서", type=["pdf","jpg","png"], accept_multiple_files=True)
-    with u3: legals = st.file_uploader("한글라벨/배합비", type=["pdf","jpg","png"], accept_multiple_files=True)
+    st.markdown("<hr>", unsafe_allow_html=True)
+
+    # 2. 본 시안 이미지 업로드 (4부분 분할)
+    st.markdown("### 🎨 3. 본 시안 이미지 (외포장 또는 단품)")
+    c1, c2, c3, c4 = st.columns(4)
+    with c1: img_main = st.file_uploader("주표시면(앞면)", type=["jpg","png","jpeg"], key="img_main")
+    with c2: img_info = st.file_uploader("정보표시면(뒷면)", type=["jpg","png","jpeg"], key="img_info")
+    with c3: img_nutri = st.file_uploader("영양성분표", type=["jpg","png","jpeg"], key="img_nutri")
+    with c4: img_extra = st.file_uploader("기타면/측면", type=["jpg","png","jpeg"], key="img_extra")
+
+    # 3. 선물세트 모드 시 내포장 업로더 활성화
+    img_inner_main = img_inner_info = img_inner_nutri = img_inner_extra = None
+    if "선물세트" in i_mode:
+        st.markdown("<hr>", unsafe_allow_html=True)
+        st.markdown("### 🎁 4. 내포장(개별 팩) 시안 (선물세트 대조 필수)")
+        ic1, ic2, ic3, ic4 = st.columns(4)
+        with ic1: img_inner_main = st.file_uploader("내포장 주표시면", type=["jpg","png","jpeg"], key="inner_main")
+        with ic2: img_inner_info = st.file_uploader("내포장 정보표시면", type=["jpg","png","jpeg"], key="inner_info")
+        with ic3: img_inner_nutri = st.file_uploader("내포장 영양성분표", type=["jpg","png","jpeg"], key="inner_nutri")
+        with ic4: img_inner_extra = st.file_uploader("내포장 기타면", type=["jpg","png","jpeg"], key="inner_extra")
+
+    st.markdown("<hr>", unsafe_allow_html=True)
+
+    # 4. 증빙 서류 업로드 (3부분 분할)
+    st.markdown("### 📄 5. 증빙 서류 (성적서/배합비/한글라벨)")
+    d1, d2, d3 = st.columns(3)
+    with d1: report_docs = st.file_uploader("시험성적서", type=["pdf","jpg","png"], accept_multiple_files=True)
+    with d2: recipe_docs = st.file_uploader("배합비 / 레시피", type=["pdf","csv","jpg","png"], accept_multiple_files=True)
+    with d3: legal_docs = st.file_uploader("한글라벨 / 품목보고서", type=["pdf","jpg","png"], accept_multiple_files=True)
 
     if st.button("🔍 전수 룰 하이브리드 QC 시작", type="primary"):
-        if not (imgs or reps or legals):
-            st.warning("🚨 파일을 업로드해주세요.")
+        # 모든 업로드 파일 수집
+        all_imgs = [img_main, img_info, img_nutri, img_extra, img_inner_main, img_inner_info, img_inner_nutri, img_inner_extra]
+        all_docs = [report_docs, recipe_docs, legal_docs]
+        
+        # 유효한 파일만 필터링
+        valid_files = [f for f in all_imgs if f is not None]
+        for doc_list in all_docs:
+            if doc_list:
+                for f in doc_list:
+                    valid_files.append(f)
+
+        if not valid_files:
+            st.warning("🚨 파일을 최소 1개 이상 업로드해주세요.")
             st.stop()
             
         content = []
         with st.spinner("AI 추출 및 Python 계산 엔진 가동 중..."):
-            for f_list in [imgs, reps, legals]:
-                if f_list:
-                    for f in f_list:
-                        if f.type.startswith("image"): content.append(Image.open(f))
-                        else:
-                            tmp = f"temp_{f.name}"
-                            with open(tmp, "wb") as file: file.write(f.getbuffer())
-                            up = genai.upload_file(tmp)
-                            while up.state.name == "PROCESSING": time.sleep(1)
-                            content.append(up)
+            for f in valid_files:
+                if f.type.startswith("image"):
+                    content.append(Image.open(f))
+                else:
+                    tmp = f"temp_{f.name}"
+                    with open(tmp, "wb") as file: file.write(f.getbuffer())
+                    up = genai.upload_file(tmp)
+                    while up.state.name == "PROCESSING": time.sleep(1)
+                    content.append(up)
             
             model = genai.GenerativeModel(MODEL_NAME, system_instruction=SYSTEM_PROMPT)
             cmd = f"[유형: {p_type}, 모드: {i_mode}] 시안과 서류를 대조하여 7단계 JSON 형식으로 응답해."
@@ -241,7 +260,9 @@ def main():
                 st.error("데이터 파싱 실패. 원본 로그를 확인하세요.")
                 st.code(resp.text)
             
-            for f in glob.glob("temp_*"): os.remove(f)
+            for f in glob.glob("temp_*"): 
+                try: os.remove(f)
+                except: pass
 
 if __name__ == "__main__":
     if check_password(): main()
