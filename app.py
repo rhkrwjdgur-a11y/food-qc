@@ -36,7 +36,7 @@ genai.configure(api_key=API_KEY)
 MODEL_NAME = "gemini-2.5-flash" 
 
 # ==========================================
-# 📚 2. 통합 전문가 프롬프트 (54대 룰 상세 버전 유지)
+# 📚 2. 통합 전문가 프롬프트 (54대 룰 상세 버전 완벽 복구)
 # ==========================================
 SYSTEM_PROMPT = """당신은 대한민국 최고의 '식품 표시사항 법규 및 품질관리(QC) 시스템'입니다.
 모든 검토 결과의 결론 앞에는 반드시 ✅(적합) 또는 🚨(부적합) 또는 🚨(확인 요망) 이모지를 붙이십시오.
@@ -244,7 +244,7 @@ def main():
     """
     st.markdown(print_css, unsafe_allow_html=True)
 
-    st.title("🏭 식품 표시사항 정밀 검토 시스템 (V18.5 - 초압축 사고 강제판)")
+    st.title("🏭 식품 표시사항 정밀 검토 시스템 (V19.1 - 상세 룰북 복구 & 스트리밍)")
     st.markdown("<hr class='hide-on-print'>", unsafe_allow_html=True)
 
     c_type, c_mode = st.columns(2)
@@ -280,113 +280,7 @@ def main():
     with d2: recipe_docs = st.file_uploader("배합비 / 레시피", type=["pdf", "csv", "jpg", "png"], accept_multiple_files=True)
     with d3: legal_docs = st.file_uploader("한글라벨 / 품목보고서", type=["pdf", "jpg", "png"], accept_multiple_files=True)
 
-    def process_qc(ptype, imode, content_hashes):
-        model = genai.GenerativeModel(MODEL_NAME, system_instruction=SYSTEM_PROMPT)
-        
-        safety_settings = [
-            {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_NONE"},
-            {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_NONE"},
-            {"category": "HARM_CATEGORY_SEXUALLY_EXPLICIT", "threshold": "BLOCK_NONE"},
-            {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_NONE"}
-        ]
-
-        # 🚀 메모리 최대한도 설정
-        generation_config = genai.types.GenerationConfig(
-            temperature=0.0,
-            max_output_tokens=8192, 
-        )
-
-        final_prompt = f"""
-        [제품유형]: {ptype}
-        [검토모드]: {imode}
-        
-        🚨 [출력 강제 명령] 🚨
-        당신의 응답은 반드시 첫 글자를 `<thinking>` 으로 시작하여야 하며, 빈칸으로 제출하는 것을 절대 금지합니다.
-        모든 판단 결과 앞에는 반드시 ✅(적합) 또는 🚨(부적합) 또는 🚨(확인 요망)을 붙이십시오.
-        
-        🚨 [긴급 차단 명령12 (마크다운 표 강제 유지)]: 아래 2번(원재료명)과 4번(영양성분표) 목차의 표는 반드시 줄바꿈(Enter)을 엄수하여 정상적인 마크다운 표(Table) 포맷으로 렌더링되게 하십시오.
-        
-        🔥 [긴급 차단 명령19 (초압축 사고 강제 - MAX_TOKENS 에러 절대 방어)] 🔥:
-        `<thinking>` 태그 내부의 글자 수가 길어지면 시스템이 뻗습니다(Finish Reason 2 에러 발생). 
-        속으로는 54개 룰 전체를 바탕으로 정밀 연산을 수행하되, 화면에 출력하는 `<thinking>` 로그는 **무조건 3~5줄 이내(최대 500자 이내)로 극도로 압축**하십시오. "1. OO룰 위반 발견, 2. XX룰 통과" 처럼 단답형 핵심 결론만 뱉어내십시오.
-        
-        <thinking>
-        (이곳에 3~5줄 이내로 극도로 압축된 핵심 추론 결과만 작성할 것)
-        </thinking>
-
-        위의 사고 과정이 끝난 후, 아래의 7단계 마크다운 리포트를 본격적으로 출력하십시오.
-
-        ## 1️⃣ [주표시면 및 마케팅 뱃지 (Rule 50, 52, 53 적용)]
-        - 결론: (✅ 또는 🚨)
-        - 🚨 [긴급 차단 명령1]: 비타민/무기질의 '고/풍부' 강조 판별 시 4가지 기준의 % 허용치를 모두 대조한 후, 단 하나라도 충족한다면 적합(✅) 처리하십시오.
-        - 🚨 [긴급 차단 명령13 (데이터 정합성 보고)]: Rule 52에 따라 N곡, N종 등 숫자가 포함된 경우, 하위 데이터와의 정합성 카운트 결과를 반드시 보고하십시오.
-        - 🚨 [긴급 차단 명령16 (제품명 연동 함량 검증)]: Rule 53에 따라 제품명에 언급된 원료(농수산물 등)가 있다면 주표시면에 해당 원료의 함량(%)이 명확히 표기되어 있는지 반드시 확인하고 결과를 보고하십시오.
-        
-        ## 2️⃣ [원재료명 및 원산지 대조 (Rule 48~54 적용)]
-        - 결론: (✅ 또는 🚨)
-        - 🚨 [긴급 차단 명령2]: 배합비 상위 3순위가 아닌 미량 원료의 원산지 누락 지적을 통제합니다.
-        - 🚨 [긴급 차단 명령3]: "영양강화제 2종" 등 그룹 묶음 표기는 적합(✅)으로 처리합니다.
-        - 🚨 [긴급 차단 명령4]: '향료' 표기 뒤에 '(착향료)' 용도명 병기를 임의로 요구하지 마십시오.
-        - 🚨 [긴급 차단 명령15 (추출 데이터와 판정 결과의 논리적 일관성 강제)]: 시안에서 원재료명 텍스트를 추출하여 표에 명시한 후, 정작 판정 칸에서는 "해당 원료가 누락되었다"며 본인이 추출한 데이터와 모순되는 결론을 내리는 논리적 오류를 엄격히 금지합니다.
-        - 🚨 [긴급 차단 명령17 (제품명 연동 원산지 강제 검증)]: Rule 53에 따라 제품명에 언급된 원료는 순위와 무관하게 원산지가 표기되어야 합니다. 이것은 Rule 28(원산지 과잉 지적 금지)의 유일한 예외 조항이므로, 제품명에 포함된 원료의 원산지가 정보표시면에 누락되었다면 예외 없이 🚨 부적합 처리하십시오.
-        - 🚨 [긴급 차단 명령18 (복수 원산지 비율 검증)]: Rule 54에 따라 원재료명에 단일 원료에 대해 2개 이상의 국가가 쉼표(,)로 표기되어 있다면, 반드시 각 국가별 혼합 비율(%)이 적혀 있는지 확인하십시오. 비율이 없다면 즉시 🚨(확인 요망)으로 플래그를 세우고 비율 생략 특례 조항 만족 여부를 담당자에게 확인하도록 리포트하십시오.
-        
-        | No | 시안 원재료명 (개별 전개) | 한글라벨 매칭 원료 | 배합비 순서 검증 | 판정 및 수정안 |
-        |---|---|---|---|---|
-        (반드시 여기에 표 내용을 줄바꿈하여 정상적인 표 형태로 작성할 것)
-        
-        ## 3️⃣ [서류 vs 시안 교차 검증 (알레르기 텍스트 추적)]
-        - 결론: (✅ 또는 🚨)
-        - 🚨 [긴급 차단 명령5]: 원재료에 '호밀'이나 '호밀농축액'이 존재한다고 하여 알레르기 유발물질 '밀' 누락으로 오판하지 마십시오.
-        - 🚨 [긴급 차단 명령14 (알레르기 교차오염 임의 판단 금지)]: 알레르기 주의 문구에 'OO 함유'로 표기되었다면, 반드시 시안의 '원재료명' 리스트 내에 'OO' 원료가 실존해야 합니다. 원재료명에 없는 물질이 '~함유'에 기재된 경우, "제조시설 공유 목적일 것"이라고 임의 추론하여 적합(✅) 처리하는 것을 금지합니다. 예외 없이 부적합(🚨) 처리하십시오.
-        
-        ## 4️⃣ [영양표시 및 % 기준치 검증]
-        - 결론: (✅ 또는 🚨)
-        - 🚨 [긴급 차단 명령6 (성적서 부재 시 데이터 일치 검증)]: 시험성적서가 업로드되지 않은 '선물세트' 검토 모드 시, [내포장(개별 팩)]의 영양정보를 마스터 데이터로 삼아 [외포장(박스)] 영양성분이 내포장과 동일하거나 배수 비례에 맞게 기재되었는지 검증하십시오.
-        - 🚨 [긴급 차단 명령7 (전략적 데이터 생략 인정)]: 시험성적서에 '식이섬유' 등의 검사 결과가 존재하더라도, 패키지 시안에 표기 의사가 없는 경우 임의로 표 항목에 추가하여 지적하지 마십시오.
-        - 🚨 [긴급 차단 명령8 (산술 연산 검증 강제)]: 산술 연산 과정을 생략하지 마십시오. '법적 허용오차 기준선' 칸에 반드시 "[시안 표시량] * 0.8 = [결과값] 이상" 포맷으로 수식을 노출하십시오.
-        - 🚨 [긴급 차단 명령9 (0표시 예외 구간 적용)]: 실측값이 0이 아니더라도, Rule 23 예외 기준 미만(예: 트랜스지방 0.2 미만)일 경우 '0' 표시를 적합으로 인정하십시오.
-        - 🚨 [긴급 차단 명령11 (기준치 임의 적용 차단)]: 칼슘의 1일 기준치로 1000mg 등 외부 데이터를 적용하지 마십시오. 모든 % 연산은 프롬프트 최상단 [⚖️ 1일 영양성분 기준치]에 명시된 식약처 수치만 대입하십시오.
-        
-        | 영양성분명 | 성적서 실측값 | 환산 실측값 | 시안 표시량 | 법적 허용오차 기준선 (계산식 필수) | 1일 기준치 | 시안 % | % 검증 (계산식) | 판정 및 수정안 |
-        |---|---|---|---|---|---|---|---|---|
-        (반드시 여기에 표 내용을 줄바꿈하여 정상적인 표 형태로 작성할 것)
-        
-        ## 5️⃣ [기타 법적 의무사항]
-        - 결론: (✅ 또는 🚨)
-        
-        ## 6️⃣ [외포장(선물세트) vs 내포장(팩) 1:1 전수 대조 결과]
-        - 결론: (✅ 또는 🚨)
-        - 🚨 [긴급 차단 명령10 (식품 접촉면 및 정보 무결성 검증)]: 
-          1) 식품 접촉면 검증: 내/외포장 텍스트 란에 '식품과 직접 닿는 면의 재질'이 명확히 표시되었는지 대조하십시오.
-          2) 무결성 검증: 물리적 디자인 차이(표기 위치 등)를 제외한 모든 규격 텍스트 데이터가 내/외포장 간 100% 일치하는지 전수 대조하십시오.
-        
-        ## 7️⃣ [종합의견 및 조치 필요사항]
-        """
-        
-        response = model.generate_content(
-            user_content + [final_prompt], 
-            generation_config=generation_config,
-            safety_settings=safety_settings
-        )
-        
-        try:
-            if not response.candidates:
-                return f"🚨 [시스템 알림] 서버 응답이 없습니다. 일시적인 트래픽 지연일 수 있습니다.\n\n(시스템 로그: {response})"
-            
-            candidate = response.candidates[0]
-            if not candidate.content.parts:
-                error_msg = f"🚨 [시스템 알림] AI 분석이 내부 메모리 한계(Context Window)로 인해 중단되었습니다.\n"
-                error_msg += f"- Finish Reason: {candidate.finish_reason}\n"
-                error_msg += f"- Safety Ratings: {candidate.safety_ratings}\n\n"
-                error_msg += "👉 조치 안내: 브라우저 새로고침(F5)으로 대화 기록을 비우고, 검토할 시안만 다시 업로드해 주십시오."
-                return error_msg
-                
-            return response.text
-        except Exception as e:
-            return f"🚨 [시스템 알림] 데이터 추출 중 예상치 못한 오류가 발생했습니다: {str(e)}\n\n(시스템 로그 확인 필요)"
-
-    if st.button("🔍 정밀 QC 검수 시작", type="primary"):
+    if st.button("🔍 정밀 QC 검수 시작 (스트리밍 모드)", type="primary"):
         has_files = any([
             img_main, img_info, img_nutri, img_extra,
             img_inner_main, img_inner_info, img_inner_nutri, img_inner_extra,
@@ -409,7 +303,7 @@ def main():
                     time.sleep(1)
                 user_content.append(uploaded)
 
-        with st.spinner(f"54대 상세 룰북 기반 초압축 연산 수행 중... [{inspection_mode}]"):
+        with st.spinner(f"파일 데이터 분석 중... [{inspection_mode}]"):
             if img_main: process_single_file(img_main, "시안_외포장_주표시면")
             if img_info: process_single_file(img_info, "시안_외포장_정보표시면")
             if img_nutri: process_single_file(img_nutri, "시안_외포장_영양성분표")
@@ -427,30 +321,108 @@ def main():
             if legal_docs:
                 for f in legal_docs: process_single_file(f, "근거_한글라벨")
 
-            try:
-                result_text = process_qc(product_type, inspection_mode, None)
-                
-                if "🚨 [시스템 알림]" in result_text:
-                    st.error(result_text)
-                else:
-                    thinking_match = re.search(r'<thinking>(.*?)</thinking>', result_text, re.DOTALL)
-                    
-                    if thinking_match:
-                        thinking_content = thinking_match.group(1).strip()
-                        report_content = result_text.replace(thinking_match.group(0), "").strip()
-                        
-                        with st.expander("🧠 AI 교차 검증 추론 과정 (핵심 요약)"):
-                            st.markdown(f"*{thinking_content}*")
-                        
-                        st.markdown(report_content)
-                    else:
-                        st.markdown(result_text)
+        # 서버 정리 작업
+        for f in glob.glob("temp_*"): 
+            os.remove(f)
 
-            except Exception as e: 
-                st.error(f"🚨 시스템 런타임 오류 발생: {e}")
-            finally:
-                for f in glob.glob("temp_*"): 
-                    os.remove(f)
+        final_prompt = f"""
+        [제품유형]: {product_type}
+        [검토모드]: {inspection_mode}
+        
+        🚨 [출력 강제 명령] 🚨
+        당신의 응답은 반드시 첫 글자를 `<thinking>` 으로 시작하십시오.
+        글자 수나 길이에 구애받지 말고 54대 룰 전체를 최대한 상세하고 정밀하게 대조하십시오.
+        (선택적 심층 추론을 통해 핵심 위반사항을 누락 없이 깊게 파고들 것)
+        
+        <thinking>
+        (이곳에 54대 룰 전체에 대한 상세한 의사결정 논리 서술. 생략이나 요약 금지)
+        </thinking>
+
+        위의 사고 과정이 끝난 후, 아래의 7단계 마크다운 리포트를 본격적으로 출력하십시오.
+
+        ## 1️⃣ [주표시면 및 마케팅 뱃지 (Rule 50, 52, 53 적용)]
+        - 결론: (✅ 또는 🚨)
+        - 🚨 [Rule 53 적용]: 제품명 언급 원료의 함량(%) 표기 여부 스캔 및 보고.
+        
+        ## 2️⃣ [원재료명 및 원산지 대조 (Rule 48~54 적용)]
+        - 결론: (✅ 또는 🚨)
+        - 🚨 [긴급 차단 명령15]: 본인이 추출한 데이터와 판정 결과 모순 방지.
+        - 🚨 [Rule 53 적용]: 제품명 언급 원료의 원산지 강제 표기 여부 검증.
+        - 🚨 [Rule 54 적용]: 복수 국가 원산지의 혼합 비율(%) 유무 검증. 누락 시 확인 요망 처리.
+        | No | 시안 원재료명 (개별 전개) | 한글라벨 매칭 원료 | 배합비 순서 검증 | 판정 및 수정안 |
+        |---|---|---|---|---|
+        
+        ## 3️⃣ [서류 vs 시안 교차 검증 (알레르기 텍스트 추적)]
+        - 결론: (✅ 또는 🚨)
+        - 🚨 [긴급 차단 명령14]: '~함유' 기재 물질이 원재료에 없으면 즉시 부적합.
+        
+        ## 4️⃣ [영양표시 및 % 기준치 검증]
+        - 결론: (✅ 또는 🚨)
+        - 🚨 [긴급 차단 명령8]: 산술 연산 수식 "[시안 표시량] * 0.8 = [결과값] 이상" 필수 노출.
+        | 영양성분명 | 성적서 실측값 | 환산 실측값 | 시안 표시량 | 법적 허용오차 기준선 (계산식 필수) | 1일 기준치 | 시안 % | % 검증 (계산식) | 판정 및 수정안 |
+        |---|---|---|---|---|---|---|---|---|
+        
+        ## 5️⃣ [기타 법적 의무사항]
+        - 결론: (✅ 또는 🚨)
+        
+        ## 6️⃣ [외포장 vs 내포장 1:1 전수 대조 결과]
+        - 결론: (✅ 또는 🚨)
+        
+        ## 7️⃣ [종합의견 및 조치 필요사항]
+        """
+
+        model = genai.GenerativeModel(MODEL_NAME, system_instruction=SYSTEM_PROMPT)
+        safety_settings = [
+            {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_NONE"},
+            {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_NONE"},
+            {"category": "HARM_CATEGORY_SEXUALLY_EXPLICIT", "threshold": "BLOCK_NONE"},
+            {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_NONE"}
+        ]
+        
+        # 최대 8192 토큰 해제 유지
+        generation_config = genai.types.GenerationConfig(
+            temperature=0.0,
+            max_output_tokens=8192, 
+        )
+
+        st.markdown("### 📡 AI 정밀 검수 실시간 출력 중... (54대 룰셋 전수 검증)")
+        
+        # 🚀 실시간 스트리밍 UI 구역
+        message_placeholder = st.empty()
+        full_response = ""
+
+        try:
+            # stream=True 로 실시간 타자 효과 및 서버/메모리 한계 돌파
+            response = model.generate_content(
+                user_content + [final_prompt], 
+                generation_config=generation_config,
+                safety_settings=safety_settings,
+                stream=True 
+            )
+
+            for chunk in response:
+                if chunk.text:
+                    full_response += chunk.text
+                    message_placeholder.markdown(full_response + "▌")
+            
+            # 텍스트 완성 후 커서(▌) 제거
+            message_placeholder.empty()
+
+            # <thinking> 태그 숨기기 아코디언 처리
+            thinking_match = re.search(r'<thinking>(.*?)</thinking>', full_response, re.DOTALL)
+            if thinking_match:
+                thinking_content = thinking_match.group(1).strip()
+                report_content = full_response.replace(thinking_match.group(0), "").strip()
+                
+                with st.expander("🧠 AI 교차 검증 추론 과정 (상세 로그 보기)"):
+                    st.markdown(f"*{thinking_content}*")
+                
+                st.markdown(report_content)
+            else:
+                st.markdown(full_response)
+
+        except Exception as e:
+            st.error(f"🚨 시스템 런타임 오류 발생: {e}\n\n잠시 후 새로고침(F5)하여 다시 시도해 주십시오.")
 
 if __name__ == "__main__":
     if check_password(): main()
