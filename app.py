@@ -36,7 +36,7 @@ genai.configure(api_key=API_KEY)
 MODEL_NAME = "gemini-2.5-flash" 
 
 # ==========================================
-# 📚 2. 통합 전문가 프롬프트 (Rule 1~52 무삭제 통합판 + 환각 차단 강화)
+# 📚 2. 통합 전문가 프롬프트 (Rule 1~52 무삭제 통합판)
 # ==========================================
 SYSTEM_PROMPT = """당신은 대한민국 최고의 '식품 표시사항 법규 및 품질관리(QC) 전문가'입니다.
 모든 검토 결과의 결론 앞에는 반드시 ✅(적합) 또는 🚨(부적합) 이모지를 붙이십시오.
@@ -222,7 +222,6 @@ SYSTEM_PROMPT = """당신은 대한민국 최고의 '식품 표시사항 법규 
 def main():
     st.set_page_config(page_title="식품 QC 마스터", page_icon="🏭", layout="wide")
     
-    # [인쇄용 CSS 핵심 패치 유지]
     print_css = """
     <style>
     @media print {
@@ -234,7 +233,7 @@ def main():
     """
     st.markdown(print_css, unsafe_allow_html=True)
 
-    st.title("🏭 식품 표시사항 정밀 검토 (V14.0 - 모순 탐지 완결판)")
+    st.title("🏭 식품 표시사항 정밀 검토 (V14.1 - 응답 Crash 방어 패치)")
     st.markdown("<hr class='hide-on-print'>", unsafe_allow_html=True)
 
     c_type, c_mode = st.columns(2)
@@ -286,14 +285,13 @@ def main():
         [검토모드]: {imode}
         
         🚨 [출력 형식 강제 명령] 🚨
+        당신의 응답은 반드시 첫 글자를 `<thinking>` 으로 시작하여야 하며, 빈칸으로 제출하는 것을 절대 금지합니다.
         모든 판단 결과 앞에는 반드시 ✅(적합) 또는 🚨(부적합) 또는 🚨(확인 요망)을 붙이십시오.
-        AI의 누락(Lost in the Middle)을 방지하기 위해 반드시 아래 지시사항을 100% 준수하십시오.
         
         🚨 [긴급 차단 명령12 (마크다운 표 강제 유지)]: 아래 2번(원재료명)과 4번(영양성분표) 목차의 표는 반드시 줄바꿈(Enter)을 엄수하여 정상적인 마크다운 표(Table)로 렌더링되게 하십시오. 파이프(|) 기호들이 한 줄로 뭉쳐서 텍스트로 깨져 나오면 절대 안 됩니다!
 
         🧠 [긴급 차단 명령0 (Chain of Thought - 사전 사고 과정 강제)]:
         최종 7단계 리포트를 작성하기 전에, 반드시 `<thinking>` 태그를 열고 업로드된 시안과 서류를 52대 룰에 맞춰 어떻게 교차 검증했는지 당신의 '의사결정 논리(사고 과정)'를 먼저 꼼꼼하게 서술하십시오.
-        (예시: "이름이 23곡분말인데 괄호 안 원료를 쉼표로 세어보니 24개네? 이거 Rule 52에 따라 논리적 모순이니 인간 담당자에게 경고해야겠다!" 와 같이 생각할 것)
         
         <thinking>
         (이곳에 52대 룰과 긴급 차단 명령을 적용하여 시안과 서류를 대조하는 당신의 모든 계산식과 판단 논리를 먼저 출력할 것)
@@ -349,7 +347,23 @@ def main():
             generation_config=genai.types.GenerationConfig(temperature=0.0),
             safety_settings=safety_settings
         )
-        return response.text
+        
+        # 🚨 빈칸 응답 Crash 방어 로직 (에러 발생 시 상세 원인 덤프)
+        try:
+            if not response.candidates:
+                return f"🚨 [API 오류] 응답이 비어있습니다. 서버 트래픽 문제일 수 있습니다.\n\n(원본 응답: {response})"
+            
+            candidate = response.candidates[0]
+            if not candidate.content.parts:
+                error_msg = f"🚨 [API 출력 차단됨] AI가 텍스트 생성을 거부했거나 중단했습니다.\n"
+                error_msg += f"- Finish Reason: {candidate.finish_reason}\n"
+                error_msg += f"- Safety Ratings: {candidate.safety_ratings}\n\n"
+                error_msg += "👉 해결책: 브라우저 새로고침(F5) 후, 파일과 텍스트를 다시 업로드하여 '새 채팅'으로 시도해 주세요."
+                return error_msg
+                
+            return response.text
+        except Exception as e:
+            return f"🚨 [시스템 알 수 없는 오류] 텍스트 추출 중 문제가 발생했습니다: {str(e)}\n\n(원본 응답 구조 확인 필요: {response})"
 
     if st.button("🔍 전수 룰 QC 시작", type="primary"):
         has_files = any([
@@ -395,24 +409,28 @@ def main():
             try:
                 result_text = process_qc(product_type, inspection_mode, None)
                 
-                # <thinking> 태그 분리 로직 (UI 최적화)
-                thinking_match = re.search(r'<thinking>(.*?)</thinking>', result_text, re.DOTALL)
-                
-                if thinking_match:
-                    thinking_content = thinking_match.group(1).strip()
-                    report_content = result_text.replace(thinking_match.group(0), "").strip()
-                    
-                    # AI의 사고 과정은 접어두기
-                    with st.expander("🧠 AI의 52대 룰 교차 검증 사고 과정 (클릭하여 보기)"):
-                        st.markdown(f"*{thinking_content}*")
-                    
-                    # 7단계 리포트 본문 출력
-                    st.markdown(report_content)
+                # 오류 메시지가 반환되었는지 확인
+                if "🚨 [API 오류]" in result_text or "🚨 [API 출력 차단됨]" in result_text or "🚨 [시스템 알 수 없는 오류]" in result_text:
+                    st.error(result_text)
                 else:
-                    st.markdown(result_text)
+                    # <thinking> 태그 분리 로직 (UI 최적화)
+                    thinking_match = re.search(r'<thinking>(.*?)</thinking>', result_text, re.DOTALL)
+                    
+                    if thinking_match:
+                        thinking_content = thinking_match.group(1).strip()
+                        report_content = result_text.replace(thinking_match.group(0), "").strip()
+                        
+                        # AI의 사고 과정은 접어두기
+                        with st.expander("🧠 AI의 52대 룰 교차 검증 사고 과정 (클릭하여 보기)"):
+                            st.markdown(f"*{thinking_content}*")
+                        
+                        # 7단계 리포트 본문 출력
+                        st.markdown(report_content)
+                    else:
+                        st.markdown(result_text)
 
             except Exception as e: 
-                st.error(f"🚨 오류: {e}")
+                st.error(f"🚨 심각한 앱 오류 발생: {e}")
             finally:
                 for f in glob.glob("temp_*"): 
                     os.remove(f)
