@@ -244,7 +244,7 @@ def main():
     """
     st.markdown(print_css, unsafe_allow_html=True)
 
-    st.title("🏭 식품 표시사항 정밀 검토 시스템 (V18.4 - 선택적 심층 추론판)")
+    st.title("🏭 식품 표시사항 정밀 검토 시스템 (V18.5 - 초압축 사고 강제판)")
     st.markdown("<hr class='hide-on-print'>", unsafe_allow_html=True)
 
     c_type, c_mode = st.columns(2)
@@ -290,7 +290,7 @@ def main():
             {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_NONE"}
         ]
 
-        # 🚀 메모리 확장 설정 유지
+        # 🚀 메모리 최대한도 설정
         generation_config = genai.types.GenerationConfig(
             temperature=0.0,
             max_output_tokens=8192, 
@@ -306,15 +306,12 @@ def main():
         
         🚨 [긴급 차단 명령12 (마크다운 표 강제 유지)]: 아래 2번(원재료명)과 4번(영양성분표) 목차의 표는 반드시 줄바꿈(Enter)을 엄수하여 정상적인 마크다운 표(Table) 포맷으로 렌더링되게 하십시오.
         
-        🧠 [긴급 차단 명령0 (Chain of Thought - 사전 추론 과정 강제)]:
-        최종 7단계 리포트를 작성하기 전에, 반드시 `<thinking>` 태그를 열고 업로드된 시안과 서류를 54대 룰에 맞춰 어떻게 교차 검증했는지 의사결정 논리를 서술하십시오.
-        
-        🔥 [긴급 차단 명령19 (선택적 심층 추론 강제 - 토큰 한계 방어)] 🔥:
-        `<thinking>` 태그 내부에서 54개의 룰을 1번부터 끝까지 모두 기계적으로 나열하며 '해당 없음'이라고 무의미하게 서술하지 마십시오! 
-        속으로는 54개 룰 전체를 꼼꼼히 검증하되, **글로 출력할 때는 '현재 업로드된 시안에서 발견된 문제점, 복잡한 산술 연산(허용오차 계산), 텍스트 간의 모순, 그리고 Rule 50~54 등 주요 예외 룰'에 대해서만 집중적으로 깊이 있게 서술**하십시오. 생각의 퀄리티는 유지하되 불필요한 나열을 줄여 시스템 출력이 끊기지 않게 방어하십시오.
+        🔥 [긴급 차단 명령19 (초압축 사고 강제 - MAX_TOKENS 에러 절대 방어)] 🔥:
+        `<thinking>` 태그 내부의 글자 수가 길어지면 시스템이 뻗습니다(Finish Reason 2 에러 발생). 
+        속으로는 54개 룰 전체를 바탕으로 정밀 연산을 수행하되, 화면에 출력하는 `<thinking>` 로그는 **무조건 3~5줄 이내(최대 500자 이내)로 극도로 압축**하십시오. "1. OO룰 위반 발견, 2. XX룰 통과" 처럼 단답형 핵심 결론만 뱉어내십시오.
         
         <thinking>
-        (이곳에 선택적 심층 추론 논리를 작성할 것)
+        (이곳에 3~5줄 이내로 극도로 압축된 핵심 추론 결과만 작성할 것)
         </thinking>
 
         위의 사고 과정이 끝난 후, 아래의 7단계 마크다운 리포트를 본격적으로 출력하십시오.
@@ -412,7 +409,7 @@ def main():
                     time.sleep(1)
                 user_content.append(uploaded)
 
-        with st.spinner(f"54대 상세 룰북 기반 선택적 심층 추론 중... [{inspection_mode}]"):
+        with st.spinner(f"54대 상세 룰북 기반 초압축 연산 수행 중... [{inspection_mode}]"):
             if img_main: process_single_file(img_main, "시안_외포장_주표시면")
             if img_info: process_single_file(img_info, "시안_외포장_정보표시면")
             if img_nutri: process_single_file(img_nutri, "시안_외포장_영양성분표")
@@ -433,22 +430,18 @@ def main():
             try:
                 result_text = process_qc(product_type, inspection_mode, None)
                 
-                # 시스템 오류 메시지 출력
                 if "🚨 [시스템 알림]" in result_text:
                     st.error(result_text)
                 else:
-                    # <thinking> 태그 분리 및 UI 최적화
                     thinking_match = re.search(r'<thinking>(.*?)</thinking>', result_text, re.DOTALL)
                     
                     if thinking_match:
                         thinking_content = thinking_match.group(1).strip()
                         report_content = result_text.replace(thinking_match.group(0), "").strip()
                         
-                        # 👔 보고용 아코디언 메뉴
-                        with st.expander("🧠 AI 교차 검증 추론 과정 (핵심 로그 보기)"):
+                        with st.expander("🧠 AI 교차 검증 추론 과정 (핵심 요약)"):
                             st.markdown(f"*{thinking_content}*")
                         
-                        # 7단계 리포트 본문 출력
                         st.markdown(report_content)
                     else:
                         st.markdown(result_text)
