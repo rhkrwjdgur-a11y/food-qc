@@ -120,7 +120,7 @@ def main():
     """
     st.markdown(print_css, unsafe_allow_html=True)
 
-    st.title("🏭 식품 표시사항 정밀 검토 시스템 (V29.0 - 표 깨짐 방지판)")
+    st.title("🏭 식품 표시사항 정밀 검토 시스템 (V30.0 - 백그라운드 추론 복구판)")
     st.markdown("<hr class='hide-on-print'>", unsafe_allow_html=True)
 
     with st.sidebar:
@@ -183,17 +183,24 @@ def main():
         [제품유형]: {product_type}
         [검토모드]: {inspection_mode}
         
-        🚨 [출력 강제 명령 - 표 렌더링 예시 준수] 🚨
-        당신은 표(Table)를 작성할 때 절대 한 줄로 이어서 쓰면 안 됩니다.
+        🚨 [사전 연산(Thinking) 강제 명령 - 정확성 확보] 🚨
+        당신은 본 리포트의 마크다운 표를 그리기 전에, 반드시 첫 글자를 `<thinking>` 태그로 열어서 각 룰에 대한 데이터 매칭과 수식 계산 과정을 명확히 기록하십시오. 이 과정을 생략하면 계산 오류가 발생합니다.
         
-        [🟢 올바른 표 작성 예시 - 반드시 엔터(Enter)를 칠 것]
+        <thinking>
+        (여기에 데이터 추출 결과 및 허용오차 산술 연산 과정 상세 기록)
+        </thinking>
+        
+        🚨 [표 렌더링 절대 강제 규칙 - 표 깨짐 방지] 🚨
+        사고 과정이 끝난 후 아래의 정식 리포트를 출력할 때, 표(Table)는 절대 한 줄로 이어서 쓰면 안 됩니다.
+        
+        [🟢 올바른 표 작성 예시 - 반드시 행마다 엔터(Enter)를 칠 것]
         | No | 원료명 | 판정 |
         |---|---|---|
         | 1 | 정제수 | 적합 |
         | 2 | 사과 | 적합 |
         
         [❌ 절대 금지 예시 - 이렇게 쓰면 시스템 에러가 발생합니다]
-        | No | 원료명 | 판정 | |---|---|---| | 1 | 정제수 | 적합 | | 2 | 사과 | 적합 |
+        | No | 원료명 | 판정 | |---|---|---| | 1 | 정제수 | 적합 |
         
         {prompt_text}
         """
@@ -223,10 +230,19 @@ def main():
                 - 기타 특이사항: 
                 """
                 result = run_qc_model(prompt)
-                if result: st.markdown(result)
+                if result:
+                    thinking_match = re.search(r'<thinking>(.*?)</thinking>', result, re.DOTALL)
+                    if thinking_match:
+                        thinking_log = thinking_match.group(1).strip()
+                        report_content = result.replace(thinking_match.group(0), "").strip()
+                        with st.expander("🧠 AI 백그라운드 추론 연산 과정 (로그 보기)"):
+                            st.markdown(f"*{thinking_log}*")
+                        st.markdown(report_content)
+                    else:
+                        st.markdown(result)
 
     # ==========================================================
-    # 탭 2: 정보표시면 검토 (표 강제)
+    # 탭 2: 정보표시면 검토
     # ==========================================================
     with tab2:
         st.info("정보표시면 이미지와 한글라벨, 배합비를 대조하여 원재료명, 원산지, 알레르기 유발물질을 검토합니다.")
@@ -236,7 +252,7 @@ def main():
                 ## 2️⃣ [원재료명 및 원산지 대조]
                 - 결론: (✅ 적합 또는 🚨 부적합)
                 
-                (반드시 위의 🟢올바른 표 작성 예시를 참고하여 각 행마다 완벽히 줄바꿈을 적용하여 그리십시오. '배합비 검증' 칸에 1순위, 2순위 등 투입 순위 필수 기입)
+                (반드시 위의 🟢올바른 표 작성 예시를 참고하여 각 행마다 완벽히 줄바꿈을 적용하여 그리십시오. '배합비 검증' 칸에 투입 순위 필수 기입)
                 | No | 시안 원재료명 | 한글라벨 매칭 원료 | 배합비 검증 (투입 순위 필수) | 판정 및 수정안 |
                 |---|---|---|---|---|
                 
@@ -246,10 +262,19 @@ def main():
                 - 교차오염 경고 중복/모순 여부:
                 """
                 result = run_qc_model(prompt)
-                if result: st.markdown(result)
+                if result:
+                    thinking_match = re.search(r'<thinking>(.*?)</thinking>', result, re.DOTALL)
+                    if thinking_match:
+                        thinking_log = thinking_match.group(1).strip()
+                        report_content = result.replace(thinking_match.group(0), "").strip()
+                        with st.expander("🧠 AI 백그라운드 추론 연산 과정 (로그 보기)"):
+                            st.markdown(f"*{thinking_log}*")
+                        st.markdown(report_content)
+                    else:
+                        st.markdown(result)
 
     # ==========================================================
-    # 탭 3: 영양성분표 검토 (표 강제)
+    # 탭 3: 영양성분표 검토
     # ==========================================================
     with tab3:
         st.info("영양성분표 이미지와 시험성적서를 대조하여 9대 영양소의 허용오차율 및 식약처 1일 기준치를 깐깐하게 계산합니다.")
@@ -259,12 +284,21 @@ def main():
                 ## 4️⃣ [영양표시 및 % 기준치 검증]
                 - 결론: (✅ 적합 또는 🚨 부적합)
                 
-                (반드시 위의 🟢올바른 표 작성 예시를 참고하여 각 행마다 완벽히 줄바꿈을 적용하여 그리십시오. "정보 없음" 금지. 계산 수식 명시)
+                (반드시 위의 🟢올바른 표 작성 예시를 참고하여 각 행마다 완벽히 줄바꿈을 적용하여 그리십시오. 계산 수식 명시)
                 | 영양성분명 | 성적서 실측값 | 시안 표시량 | 법적 허용오차 기준선 | 1일 기준치 | 시안 % | % 검증 | 판정 |
                 |---|---|---|---|---|---|---|---|
                 """
                 result = run_qc_model(prompt)
-                if result: st.markdown(result)
+                if result:
+                    thinking_match = re.search(r'<thinking>(.*?)</thinking>', result, re.DOTALL)
+                    if thinking_match:
+                        thinking_log = thinking_match.group(1).strip()
+                        report_content = result.replace(thinking_match.group(0), "").strip()
+                        with st.expander("🧠 AI 백그라운드 추론 연산 과정 (로그 보기)"):
+                            st.markdown(f"*{thinking_log}*")
+                        st.markdown(report_content)
+                    else:
+                        st.markdown(result)
 
 if __name__ == "__main__":
     if check_password(): main()
