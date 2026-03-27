@@ -52,7 +52,7 @@ SYSTEM_PROMPT = """당신은 대한민국 최고의 '식품 표시사항 법규 
 제공된 법령(고시)과 사용자가 업로드한 자료들을 교차 검증하십시오. 문서에 없는 데이터를 임의로 지어내는 환각(Hallucination)을 엄격히 통제합니다."""
 
 # ==========================================
-# 📚 3. 55대 룰북 원문 (단 한 글자도 생략/축소 금지 100% 풀버전)
+# 📚 3. 55대 룰북 원문 (Rule 53 완벽 교정판)
 # ==========================================
 RULE_BOOK = """
 # [식품 패키지 표시사항 QC 자동화 검수 시스템 룰북]
@@ -231,11 +231,12 @@ RULE_BOOK = """
 🔥 **Rule 52. [논리적 모순 탐지 및 정합성 검증]**
    - 제품명이나 마케팅 문구에 특정 숫자(예: '23곡', '15종', '5無')가 명시되어 있다면, 괄호 안 원재료명에 나열된 실제 항목의 개수(쉼표 개수 기반)와 **논리적/수학적으로 정확히 일치하는지 반드시 대조 카운트하십시오.**
 
-🔥 **Rule 53. [제품명 연동 원료 함량 및 원산지 강제 추적 룰]**
-   - 주표시면(앞면)의 **'제품명'에 특정 농수산물이나 원재료의 명칭(예: 딸기, 고구마, 홍삼 등)이 포함**되어 있는지 스캔하십시오.
+🔥 **Rule 53. [제품명 연동 원료 함량 및 원산지 강제 추적 룰 (🚨농산물 원물 한정)]**
+   - 주표시면(앞면)의 **'제품명'에 특정 원재료의 명칭**이 포함되어 있는지 스캔하십시오.
    - 포함되어 있다면 다음 2가지를 강제 대조 검증하십시오.
-     1) **함량 검증:** 주표시면에 해당 원료의 함량(%)이 명확히 명시되어 있는지 확인. (누락 시 🚨 부적합)
-     2) **원산지 검증:** 해당 원료가 배합비 상위 3순위 밖 미량 원료이더라도, 정보표시면의 원재료명 리스트에 **해당 원료의 '원산지'가 반드시 기재**되어 있어야 합니다. (누락 시 🚨 부적합)
+     1) **함량 검증 (모든 원료 공통):** 주표시면에 해당 원료의 함량(%)이 명확히 명시되어 있는지 확인하십시오. (누락 시 🚨 부적합)
+     2) **원산지 검증 (🚨진짜 농수산물 원물만 해당):** 해당 원료가 **'진짜 농수산물(예: 딸기, 고구마, 밤, 우유, 돼지고기, 쌀 등 자연 원물)'**인 경우에만 정보표시면에 원산지가 기재되어 있는지 검증하십시오. (누락 시 🚨 부적합)
+     - **[✅가공품 원산지 면제]:** 만약 제품명에 쓰인 원료가 진짜 원물이 아니라 **'가공품(예: 코코아분말, 페이스트, 농축액, 추출액 등)'**이거나 첨가물이라면, 원산지 의무 표기 대상이 아니므로 정보표시면에 원산지가 누락되어 있어도 적합(✅)으로 판정하십시오.
 
 🔥 **Rule 54. [복수 원산지 혼합 비율 생략 합법성 검증 룰]**
    - 정보표시면 원재료명에 단일 원료에 대해 2개 이상의 국가가 쉼표(,)로 병기되어 있고(예: 가나산, 에콰도르산), **각 국가별 혼합 비율(%)이 기재되어 있지 않은 경우** 덮어놓고 적합(✅)으로 판정하지 마십시오. 반드시 🚨(확인 요망) 플래그를 띄우고 부서 확인을 지시하십시오.
@@ -250,6 +251,13 @@ RULE_BOOK = """
 def main():
     st.set_page_config(page_title="식품 QC 마스터", page_icon="🏭", layout="wide")
     
+    # 🔒 세션 스테이트(메모리) 초기화 - 탭 간 전환 시 결과 유지
+    if "result_tab1" not in st.session_state: st.session_state["result_tab1"] = None
+    if "result_tab2" not in st.session_state: st.session_state["result_tab2"] = None
+    if "result_tab3" not in st.session_state: st.session_state["result_tab3"] = None
+    if "result_tab4" not in st.session_state: st.session_state["result_tab4"] = None
+    if "result_summary" not in st.session_state: st.session_state["result_summary"] = None
+
     print_css = """
     <style>
     @media print {
@@ -261,7 +269,7 @@ def main():
     """
     st.markdown(print_css, unsafe_allow_html=True)
 
-    st.title("🏭 식품 표시사항 정밀 검토 시스템 (V50.0 - 55대 룰북 원상복구판)")
+    st.title("🏭 식품 표시사항 정밀 검토 시스템 (V52.0 - Rule 53 농산물 원물 한정 패치)")
     st.markdown("<hr class='hide-on-print'>", unsafe_allow_html=True)
 
     with st.sidebar:
@@ -345,25 +353,28 @@ def main():
             return f"🚨 시스템 런타임 오류 발생: {e}"
 
     st.markdown("### 🔍 시안 구간별 정밀 검토")
-    tab1, tab2, tab3, tab4 = st.tabs(["1️⃣ 주표시면 (마케팅/뱃지)", "2️⃣ 정보표시면 (원재료/알레르기)", "3️⃣ 영양성분표 (오차 연산)", "4️⃣ 기타면/측면 (추가 마케팅)"])
+    tab1, tab2, tab3, tab4, tab5 = st.tabs([
+        "1️⃣ 주표시면", 
+        "2️⃣ 정보표시면", 
+        "3️⃣ 영양성분표", 
+        "4️⃣ 기타면/측면",
+        "📊 5️⃣ 종합 보고서"
+    ])
 
     # ==========================================================
     # 탭 1: 주표시면 검토
     # ==========================================================
     with tab1:
-        st.info("주표시면 이미지와 배합비를 대조하여 마케팅 문구, 함량 표기, 제로 강조 및 감미료 표기 위치(Rule 24) 등을 검토합니다.")
+        st.info("주표시면 이미지와 배합비를 대조하여 마케팅 문구, 함량 표기, 제로 강조 및 감미료 표기 위치 등을 검토합니다.")
         if st.button("▶️ 주표시면 분석 시작", key="btn_main"):
             with st.spinner("주표시면 텍스트 및 뱃지 정밀 대조 중..."):
                 prompt = """
                 [지시]: 오직 '주표시면'에 대한 리뷰만 출력하십시오. 
-                
                 🚨 [1단계: 사전 판단(Thinking) 강제] 🚨
-                리뷰를 출력하기 전에 반드시 `<thinking>` 태그를 열어 시안의 가장 큰 글씨(강조표시)가 무엇인지, 그 옆에 뱃지가 적절히 붙어있는지, 고형분 함량이 서류보다 낮은지 등을 먼저 논리적으로 분석하십시오.
-                
+                리뷰를 출력하기 전에 반드시 `<thinking>` 태그를 열어 분석하십시오.
                 <thinking>
-                (여기에 마케팅 문구, 뱃지 위치 등 사전 분석 내용 기록)
+                (마케팅 문구, 뱃지 위치 등 사전 분석 내용 기록)
                 </thinking>
-                
                 🚨 [2단계: 정식 리포트 출력] 🚨
                 ## 1️⃣ [주표시면 및 마케팅 뱃지]
                 - 결론: (✅ 적합 또는 🚨 부적합/확인요망)
@@ -373,67 +384,65 @@ def main():
                 - 제품명 연동 함량(%) 표기 여부: 
                 - 기타 특이사항 (과장광고 등): 
                 """
-                result = run_qc_model(prompt)
-                if result:
-                    thinking_match = re.search(r'<thinking>(.*?)</thinking>', result, re.DOTALL)
-                    if thinking_match:
-                        thinking_log = thinking_match.group(1).strip()
-                        report_content = result.replace(thinking_match.group(0), "").strip()
-                        with st.expander("🧠 주표시면 마케팅 뱃지 및 위치 추론 로그 보기"):
-                            st.markdown(f"*{thinking_log}*")
-                        st.markdown(report_content)
-                    else:
-                        st.markdown(result)
+                st.session_state["result_tab1"] = run_qc_model(prompt)
+
+        if st.session_state["result_tab1"]:
+            result = st.session_state["result_tab1"]
+            thinking_match = re.search(r'<thinking>(.*?)</thinking>', result, re.DOTALL)
+            if thinking_match:
+                thinking_log = thinking_match.group(1).strip()
+                report_content = result.replace(thinking_match.group(0), "").strip()
+                with st.expander("🧠 주표시면 마케팅 뱃지 및 위치 추론 로그 보기"):
+                    st.markdown(f"*{thinking_log}*")
+                st.markdown(report_content)
+            else:
+                st.markdown(result)
 
     # ==========================================================
-    # 탭 2: 정보표시면 검토 (V49 한글라벨 융통성 유지)
+    # 탭 2: 정보표시면 검토 
     # ==========================================================
     with tab2:
         st.info("정보표시면 이미지와 한글라벨, 배합비를 대조하여 원재료명, 원산지, 알레르기를 전수 검토합니다.")
         if st.button("▶️ 정보표시면 원재료 100% 대조 시작", key="btn_info"):
             with st.spinner("서류 분석 및 원재료 대조 표 렌더링 중... (최대 30초 소요)"):
                 prompt = """
-                [지시]: 오직 아래의 원재료명 표와 알레르기 교차검증 양식만 출력하십시오. 절대 중간에 생성을 멈추지 마십시오.
-                
+                [지시]: 오직 아래의 원재료명 표와 알레르기 교차검증 양식만 출력하십시오.
                 🚨 [1단계: 서류 분석 및 융통성 판단 (Thinking 강제)] 🚨
-                `<thinking>` 태그를 열고 업로드된 서류(한글라벨/배합비)에 완제품 기준의 전체 '배합비(%)'가 적혀 있는지 확인하십시오.
-                - 만약 전체 배합비(%)가 있다면: 높은 숫자부터 내림차순으로 정렬하십시오.
-                - **만약 전체 배합비(%)가 없다면 (예: 성분명만 나열된 한글라벨의 경우): 정렬을 포기하고 배합비 검증은 건너뛰십시오. 대신 시안과 서류에 적힌 '원재료명'과 '원산지'를 1:1로 꼼꼼히 매칭하는 것에 집중하십시오. 전체 %가 없다는 이유로 표 작성을 포기하거나 멈춰서는 절대 안 됩니다.**
-                
+                `<thinking>` 태그를 열고 전체 '배합비(%)'가 적혀 있는지 확인하십시오. %가 없다면 정렬은 건너뛰고 바로 1:1 매칭을 진행하십시오. 표 작성을 절대 포기하지 마십시오.
                 <thinking>
-                (여기에 서류 종류 파악 및 대조 준비 과정 기록)
+                (서류 종류 파악 및 대조 준비 과정 기록)
                 </thinking>
-                
                 🚨 [2단계: 정식 리포트 및 표 렌더링] 🚨
                 ## 2️⃣ [원재료명 및 원산지 대조]
                 - 결론: (✅ 적합 또는 🚨 부적합)
-                
-                (🚨 절대 경고: 아래 표를 작성할 때 무조건 파이프(|) 기호를 사용하여 마크다운 표 형태를 완벽하게 유지하십시오. 배합비를 모르면 '서류 내 % 미상'이라고 적고 넘어갑니다.)
+                (🚨 절대 경고: 아래 표를 작성할 때 무조건 파이프(|) 기호를 사용하십시오.)
                 [🟢 올바른 표 작성 예시]
                 | No | 시안 원재료명 | 서류 매칭 원료 (품번, 스펙 등) | 배합비 검증 (모르면 생략) | 판정 및 사유 |
                 |---|---|---|---|---|
-                | 1 | 코코아분말 | 코코아 100% (네덜란드) | 서류 내 % 미상 | 🚨 부적합 (시안에 원산지 누락) |
+                | 1 | 코코아분말 | 코코아 100% (네덜란드) | 서류 내 % 미상 | ✅ 적합 (Rule 53 적용: 가공품이므로 원산지 표기 의무 없음) |
                 
                 (여기에 위 예시를 참고하여 시안에 적힌 모든 원료를 대조하는 표를 그리십시오.)
                 
-                - [Rule 53, 54 검토 사항]: (제품명 연동 원료 함량/원산지, 복수 원산지 비율 위반 사항이 있다면 여기에 별도로 서술하십시오.)
+                - [Rule 53, 54 검토 사항]: (제품명 연동 원료 함량/원산지 등 별도 서술)
                 
                 ## 3️⃣ [서류 vs 시안 교차 검증 (알레르기 텍스트 추적)]
                 - 결론: (✅ 적합 또는 🚨 부적합)
                 - '~함유' 물질 원재료명 실존 여부:
                 - 교차오염 경고 중복/모순 여부:
                 """
-                result = run_qc_model(prompt)
-                if result:
-                    thinking_match = re.search(r'<thinking>(.*?)</thinking>', result, re.DOTALL)
-                    if thinking_match:
-                        thinking_log = thinking_match.group(1).strip()
-                        report_content = result.replace(thinking_match.group(0), "").strip()
-                        with st.expander("🧠 서류 분석 및 원산지/알레르기 대조 추론 로그 보기"):
-                            st.markdown(f"*{thinking_log}*")
-                        st.markdown(report_content)
-                    else:
-                        st.markdown(result)
+                st.session_state["result_tab2"] = run_qc_model(prompt)
+
+        if st.session_state["result_tab2"]:
+            result = st.session_state["result_tab2"]
+            thinking_match = re.search(r'<thinking>(.*?)</thinking>', result, re.DOTALL)
+            if thinking_match:
+                thinking_log = thinking_match.group(1).strip()
+                report_content = result.replace(thinking_match.group(0), "").strip()
+                with st.expander("🧠 서류 분석 및 원산지/알레르기 대조 추론 로그 보기"):
+                    st.markdown(f"*{thinking_log}*")
+                st.markdown(report_content)
+            else:
+                st.markdown(result)
 
     # ==========================================================
     # 탭 3: 영양성분표 검토 
@@ -443,38 +452,36 @@ def main():
         if st.button("▶️ 영양성분표 오차 정밀 연산 시작", key="btn_nutri"):
             with st.spinner("영양성분 오차 수식 계산 및 표 렌더링 중..."):
                 prompt = """
-                🚨 [최고 수준 경고]: 당신은 지금 [3번 탭: 영양성분표 검토] 전용 모드입니다. 다른 탭의 내용은 출력 금지.
-                
+                🚨 [최고 수준 경고]: 당신은 지금 [3번 탭: 영양성분표 검토] 전용 모드입니다. 
                 🚨 [1단계: 사전 판단(Thinking) 강제] 🚨
-                표를 그리기 전에 반드시 `<thinking>` 태그를 열어 오차율을 계산하십시오. 계산이 끝나면 반드시 `</thinking>` 태그를 닫고 2단계로 넘어가십시오. 절대 중간에 멈추지 마십시오.
-                
+                표를 그리기 전에 반드시 `<thinking>` 태그를 열어 오차율을 계산하십시오.
                 <thinking>
-                (여기에 9개 성분의 허용오차 기준선(0.8/1.2배) 및 1일 기준치 비율 계산식만 간략히 작성)
+                (9개 성분의 허용오차 기준선 및 1일 기준치 비율 계산식 기록)
                 </thinking>
-                
                 🚨 [2단계: 정식 표 렌더링] 🚨
                 ## 4️⃣ [영양표시 및 % 기준치 검증]
                 - 결론: (✅ 적합 또는 🚨 부적합)
-                
-                (🚨 절대 경고: 아래 표를 작성할 때 무조건 파이프(|) 기호를 사용하여 마크다운 표 형태를 완벽하게 유지하십시오.)
+                (🚨 절대 경고: 파이프(|) 기호를 사용하여 마크다운 표 형태를 완벽하게 유지하십시오.)
                 [🟢 올바른 표 작성 예시]
                 | 영양성분명 | 성적서 실측값 | 시안 표시량 | 법적 허용오차 기준선 | 1일 기준치 | 시안 % | % 검증 | 판정 |
                 |---|---|---|---|---|---|---|---|
                 | 나트륨 | 15mg | 20mg | 18mg 미만 | 2000mg | 1% | 적합 | ✅ 적합 |
                 
-                (여기에 위 예시의 파이프(|) 포맷을 정확히 지켜서 9개 성분의 표를 완벽하게 그리십시오.)
+                (여기에 표를 작성하십시오.)
                 """
-                result = run_qc_model(prompt)
-                if result:
-                    thinking_match = re.search(r'<thinking>(.*?)</thinking>', result, re.DOTALL)
-                    if thinking_match:
-                        thinking_log = thinking_match.group(1).strip()
-                        report_content = result.replace(thinking_match.group(0), "").strip()
-                        with st.expander("🧠 영양소 산술 연산 로그 보기 (마케팅 리뷰 배제)"):
-                            st.markdown(f"*{thinking_log}*")
-                        st.markdown(report_content)
-                    else:
-                        st.markdown(result)
+                st.session_state["result_tab3"] = run_qc_model(prompt)
+
+        if st.session_state["result_tab3"]:
+            result = st.session_state["result_tab3"]
+            thinking_match = re.search(r'<thinking>(.*?)</thinking>', result, re.DOTALL)
+            if thinking_match:
+                thinking_log = thinking_match.group(1).strip()
+                report_content = result.replace(thinking_match.group(0), "").strip()
+                with st.expander("🧠 영양소 산술 연산 로그 보기"):
+                    st.markdown(f"*{thinking_log}*")
+                st.markdown(report_content)
+            else:
+                st.markdown(result)
 
     # ==========================================================
     # 탭 4: 기타면/측면 검토 
@@ -485,14 +492,10 @@ def main():
             with st.spinner("기타면/측면 텍스트 및 마케팅 적합성 검토 중..."):
                 prompt = """
                 [지시]: 오직 아래의 기타면/측면 양식 5번 목차만 출력하십시오. 
-                
                 🚨 [1단계: 사전 판단(Thinking) 강제] 🚨
-                리뷰를 출력하기 전에 반드시 `<thinking>` 태그를 여십시오. 판단이 끝나면 반드시 `</thinking>` 태그를 닫고 2단계로 넘어가십시오.
-                
                 <thinking>
                 (기타면에 적힌 문구 추출 및 허위/과장광고 여부 판단 기록)
                 </thinking>
-                
                 🚨 [2단계: 정식 리포트 출력] 🚨
                 ## 5️⃣ [기타면/측면 표시사항 및 마케팅 뱃지]
                 - 결론: (✅ 적합 또는 🚨 부적합/확인요망)
@@ -501,17 +504,70 @@ def main():
                 - 제품명/원료 함량 강조 적합성:
                 - 기타 특이사항: 
                 """
-                result = run_qc_model(prompt)
-                if result:
-                    thinking_match = re.search(r'<thinking>(.*?)</thinking>', result, re.DOTALL)
-                    if thinking_match:
-                        thinking_log = thinking_match.group(1).strip()
-                        report_content = result.replace(thinking_match.group(0), "").strip()
-                        with st.expander("🧠 기타면 마케팅 문구 추출 및 추론 로그 보기"):
-                            st.markdown(f"*{thinking_log}*")
-                        st.markdown(report_content)
-                    else:
-                        st.markdown(result)
+                st.session_state["result_tab4"] = run_qc_model(prompt)
+
+        if st.session_state["result_tab4"]:
+            result = st.session_state["result_tab4"]
+            thinking_match = re.search(r'<thinking>(.*?)</thinking>', result, re.DOTALL)
+            if thinking_match:
+                thinking_log = thinking_match.group(1).strip()
+                report_content = result.replace(thinking_match.group(0), "").strip()
+                with st.expander("🧠 기타면 마케팅 문구 추출 및 추론 로그 보기"):
+                    st.markdown(f"*{thinking_log}*")
+                st.markdown(report_content)
+            else:
+                st.markdown(result)
+
+    # ==========================================================
+    # 탭 5: 📊 종합 결과 보고서
+    # ==========================================================
+    with tab5:
+        st.info("지금까지 1~4번 탭에서 분석한 모든 결과를 끌어모아 '최종 요약 및 수정 권고사항'을 작성합니다.")
+        if st.button("▶️ 최종 종합 리포트 생성", key="btn_summary"):
+            if not any([st.session_state["result_tab1"], st.session_state["result_tab2"], st.session_state["result_tab3"], st.session_state["result_tab4"]]):
+                st.warning("🚨 앞의 1~4번 탭 중에서 최소 1개 이상을 먼저 분석해 주십시오!")
+            else:
+                with st.spinner("모든 분석 데이터를 병합하여 최종 수정 지시서를 작성 중입니다..."):
+                    combined_results = f"""
+                    [1번 탭 결과]: {st.session_state.get('result_tab1', '분석 안 함')}
+                    [2번 탭 결과]: {st.session_state.get('result_tab2', '분석 안 함')}
+                    [3번 탭 결과]: {st.session_state.get('result_tab3', '분석 안 함')}
+                    [4번 탭 결과]: {st.session_state.get('result_tab4', '분석 안 함')}
+                    """
+                    
+                    summary_prompt = f"""
+                    [지시]: 지금까지 사용자가 각 탭에서 검토한 내용들을 모았습니다. 아래의 기존 결과들을 철저히 분석하여, 실무자가 한눈에 보고 패키지를 수정할 수 있도록 종합 결론을 내려주십시오.
+
+                    [기존 분석 데이터]
+                    {combined_results}
+                    
+                    🚨 [출력 템플릿 강제]
+                    당신은 반드시 아래의 마크다운 템플릿 양식만 출력해야 합니다.
+                    
+                    ## 📋 [최종 종합 검토 리포트]
+                    - **최종 판정:** (✅ 수정 없이 진행 가능 또는 🚨 즉시 수정 필요)
+                    
+                    ### 📌 [핵심 지적 사항 및 수정 지시]
+                    (위 기존 분석 데이터에서 '부적합(🚨)' 또는 '확인요망'이 나온 내용들만 뽑아서, 디자인팀/연구소에서 즉각적으로 알아볼 수 있도록 수정 방안을 1, 2, 3번 불릿 포인트로 강력하게 요약하여 나열하십시오. 적합(✅)으로 나온 칭찬 내용은 적을 필요 없습니다.)
+                    
+                    ### 🔍 [기타 주의사항]
+                    (수정 사항 외에 실무자가 참고해야 할 55대 룰북 관련 코멘트가 있다면 간략히 덧붙이십시오.)
+                    """
+                    st.session_state["result_summary"] = run_qc_model(summary_prompt)
+
+        if st.session_state["result_summary"]:
+            st.markdown(st.session_state["result_summary"])
+            
+            st.markdown("---")
+            st.markdown("#### 📂 (참고) 각 탭별 상세 분석 데이터")
+            with st.expander("1️⃣ 주표시면 원본 결과"):
+                st.markdown(st.session_state["result_tab1"] if st.session_state["result_tab1"] else "분석 안 함")
+            with st.expander("2️⃣ 정보표시면 원본 결과"):
+                st.markdown(st.session_state["result_tab2"] if st.session_state["result_tab2"] else "분석 안 함")
+            with st.expander("3️⃣ 영양성분표 원본 결과"):
+                st.markdown(st.session_state["result_tab3"] if st.session_state["result_tab3"] else "분석 안 함")
+            with st.expander("4️⃣ 기타면/측면 원본 결과"):
+                st.markdown(st.session_state["result_tab4"] if st.session_state["result_tab4"] else "분석 안 함")
 
 if __name__ == "__main__":
     if check_password(): main()
