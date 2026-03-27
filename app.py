@@ -4,7 +4,6 @@ from PIL import Image
 import glob
 import time
 import os
-import re
 
 # ==========================================
 # 🔒 [보안] 시스템 접속 비밀번호 설정
@@ -36,13 +35,9 @@ genai.configure(api_key=API_KEY)
 MODEL_NAME = "gemini-2.5-flash" 
 
 # ==========================================
-# 📚 2. 통합 전문가 프롬프트 (54대 룰 상세 버전)
+# 📚 2. 통합 전문가 프롬프트 (54대 룰 완전 원상복구본)
 # ==========================================
-SYSTEM_PROMPT = """당신은 대한민국 최고의 '식품 표시사항 법규 및 품질관리(QC) 시스템'입니다.
-모든 검토 결과의 결론 앞에는 반드시 ✅(적합) 또는 🚨(부적합) 또는 🚨(확인 요망) 이모지를 붙이십시오.
-제공된 법령(고시)과 사용자가 업로드한 자료들을 교차 검증하십시오. 당신의 판단은 100% 논리적으로 일관되어야 하며, 문서에 없는 데이터를 임의로 생성(Hallucination)하거나 연산 과정을 누락하는 것을 엄격히 통제합니다.
-
----
+RULE_BOOK = """
 # [식품 패키지 표시사항 QC 자동화 검수 시스템 룰북]
 
 ## 🚨 [⚖️ 1일 영양성분 기준치 (외부 데이터 개입 차단)] 🚨
@@ -84,8 +79,8 @@ SYSTEM_PROMPT = """당신은 대한민국 최고의 '식품 표시사항 법규 
 
 🔥 **Rule 11. [영양정보 허용오차 산술 연산 법칙 (역산 오류 방지)]**
    - **[🚨역산 금지]**: 무조건 **'시안 표시량'에 0.8 또는 1.2를 곱하여** 법적 기준선을 도출하십시오.
-   - **[80% 이상 합법 그룹 (비타민, 무기질, 단백질 등)]**: (성적서 환산 실측값) $\ge$ (시안 표시량 $\times$ 0.8) 이면 적합(✅).
-   - **[120% 미만 합법 그룹 (열량, 당류, 지방 등)]**: (성적서 환산 실측값) $\le$ (시안 표시량 $\times$ 1.2) 이면 적합(✅). 
+   - **[80% 이상 합법 그룹 (비타민, 무기질, 단백질 등)]**: (성적서 환산 실측값) >= (시안 표시량 * 0.8) 이면 적합(✅).
+   - **[120% 미만 합법 그룹 (열량, 당류, 지방 등)]**: (성적서 환산 실측값) <= (시안 표시량 * 1.2) 이면 적합(✅). 
 
 ✅ **Rule 12. [원재료명 3단 교차 검증 및 임의 추론 금지]**
    - 배합비 데이터 없이 레시피를 상상하거나 임의로 지적하지 마십시오. 
@@ -159,7 +154,7 @@ SYSTEM_PROMPT = """당신은 대한민국 최고의 '식품 표시사항 법규 
    - 배합비 기준 2% 미만 원료는 기재 순서가 달라도 적합으로 판정하십시오.
 
 ✅ **Rule 35. [서류 명칭 일치(간략명) 허용]**
-   - 의미상 동일 간략 명칭은 적합 처리하십시오.
+   - 의미상 동일한 간략 명칭은 적합 처리하십시오.
 
 ✅ **Rule 36. [주의사항 오탈자 스캔]**
    - 필수 주의사항 문구의 오탈자를 정밀 검수하십시오.
@@ -224,7 +219,6 @@ SYSTEM_PROMPT = """당신은 대한민국 최고의 '식품 표시사항 법규 
 🔥 **Rule 54. [복수 원산지 혼합 비율 생략 합법성 검증 룰]**
    - 정보표시면 원재료명에 단일 원료에 대해 2개 이상의 국가가 쉼표(,)로 병기되어 있고(예: 가나산, 에콰도르산), **각 국가별 혼합 비율(%)이 기재되어 있지 않은 경우** 덮어놓고 적합(✅)으로 판정하지 마십시오.
    - 이 경우 반드시 🚨(확인 요망) 플래그를 띄우고, 판정 결과 란에 다음 문구를 출력하십시오: "복수 원산지가 혼합 비율(%) 없이 기재되었습니다. 농산물 원산지표시법에 따른 예외 조건(최근 3년 내 연평균 3회 이상 비율 변경 등)을 충족하는지 내부 실무 부서(수급/구매팀)와 확인이 필요합니다."
----
 """
 
 # ==========================================
@@ -244,7 +238,7 @@ def main():
     """
     st.markdown(print_css, unsafe_allow_html=True)
 
-    st.title("🏭 식품 표시사항 정밀 검토 시스템 (V22.0 - 토큰 최적화 및 표 복구판)")
+    st.title("🏭 식품 표시사항 정밀 검토 시스템 (V24.0 - 3단계 완벽 검증판)")
     st.markdown("<hr class='hide-on-print'>", unsafe_allow_html=True)
 
     c_type, c_mode = st.columns(2)
@@ -280,7 +274,7 @@ def main():
     with d2: recipe_docs = st.file_uploader("배합비 / 레시피", type=["pdf", "csv", "jpg", "png"], accept_multiple_files=True)
     with d3: legal_docs = st.file_uploader("한글라벨 / 품목보고서", type=["pdf", "jpg", "png"], accept_multiple_files=True)
 
-    if st.button("🔍 정밀 QC 원샷 검수 시작", type="primary"):
+    if st.button("🔍 3단계 파이프라인 정밀 검수 시작", type="primary"):
         has_files = any([
             img_main, img_info, img_nutri, img_extra,
             img_inner_main, img_inner_info, img_inner_nutri, img_inner_extra,
@@ -303,123 +297,157 @@ def main():
                     time.sleep(1)
                 user_content.append(uploaded)
 
-        with st.spinner(f"파일 분석 및 토큰 최적화 렌더링 준비 중... [{inspection_mode}]"):
-            if img_main: process_single_file(img_main, "시안_외포장_주표시면")
-            if img_info: process_single_file(img_info, "시안_외포장_정보표시면")
-            if img_nutri: process_single_file(img_nutri, "시안_외포장_영양성분표")
-            if img_extra: process_single_file(img_extra, "시안_외포장_기타면")
-            
-            if img_inner_main: process_single_file(img_inner_main, "시안_내포장_주표시면")
-            if img_inner_info: process_single_file(img_inner_info, "시안_내포장_정보표시면")
-            if img_inner_nutri: process_single_file(img_inner_nutri, "시안_내포장_영양성분표")
-            if img_inner_extra: process_single_file(img_inner_extra, "시안_내포장_기타면")
-            
-            if report_docs: 
-                for f in report_docs: process_single_file(f, "근거_성적서")
-            if recipe_docs:
-                for f in recipe_docs: process_single_file(f, "근거_배합비")
-            if legal_docs:
-                for f in legal_docs: process_single_file(f, "근거_한글라벨")
+        progress_bar = st.progress(0)
+        status_text = st.empty()
+
+        status_text.markdown("🔄 **[준비 중]** 서류 및 이미지 데이터를 AI 분석 엔진에 로드합니다...")
+        if img_main: process_single_file(img_main, "시안_외포장_주표시면")
+        if img_info: process_single_file(img_info, "시안_외포장_정보표시면")
+        if img_nutri: process_single_file(img_nutri, "시안_외포장_영양성분표")
+        if img_extra: process_single_file(img_extra, "시안_외포장_기타면")
+        if img_inner_main: process_single_file(img_inner_main, "시안_내포장_주표시면")
+        if img_inner_info: process_single_file(img_inner_info, "시안_내포장_정보표시면")
+        if img_inner_nutri: process_single_file(img_inner_nutri, "시안_내포장_영양성분표")
+        if img_inner_extra: process_single_file(img_inner_extra, "시안_내포장_기타면")
+        if report_docs: 
+            for f in report_docs: process_single_file(f, "근거_성적서")
+        if recipe_docs:
+            for f in recipe_docs: process_single_file(f, "근거_배합비")
+        if legal_docs:
+            for f in legal_docs: process_single_file(f, "근거_한글라벨")
 
         for f in glob.glob("temp_*"): 
             os.remove(f)
 
-        final_prompt = f"""
-        [제품유형]: {product_type}
-        [검토모드]: {inspection_mode}
+        progress_bar.progress(20)
         
-        🚨 [출력 토큰 과부하 방지 명령 (매우 중요!)] 🚨
-        당신의 응답은 반드시 첫 글자를 `<thinking>` 으로 시작하십시오.
-        단, `<thinking>` 태그 내에서 54개 룰을 1번부터 54번까지 기계적으로 다 쓰면 메모리(토큰) 부족으로 최종 표가 잘립니다! 
-        따라서 **수학적 계산(영양소 오차 등), 원재료 매칭, 그리고 적발된 위반 사항 위주로만 깊이 있게 쓰고, 적합 판정된 단순 룰은 "Rule 1~10: 특이사항 없음" 식으로 묶어서 압축**하십시오. 그래야 표를 그릴 토큰이 남습니다.
-        
-        <thinking>
-        (핵심 검증 로직, 계산식, 위반 사항 위주로 상세하되, 통과된 단순 룰은 묶어서 압축 서술할 것)
-        </thinking>
-
-        위의 사고 과정이 끝난 후, 아래의 7단계 리포트를 출력하십시오.
-        
-        🚨 [마크다운 표 렌더링 절대 강제 규칙] 🚨
-        2번과 4번 항목에서 표를 출력할 때, **절대로 한 줄에 모든 내용을 이어 쓰지 마십시오!** 표가 깨집니다.
-        반드시 각 행(Row)마다 마지막에 키보드 엔터(줄바꿈, `\\n`)를 쳐서 정상적인 표(Table) 형태로 렌더링되게 하십시오.
-        또한 표 안에 "정보 없음"이라고 적지 말고 서류에서 데이터를 기필코 찾아 채워 넣으십시오.
-
-        ## 1️⃣ [주표시면 및 마케팅 뱃지]
-        - 결론: (✅ 또는 🚨)
-        
-        ## 2️⃣ [원재료명 및 원산지 대조]
-        - 결론: (✅ 또는 🚨)
-        | No | 시안 원재료명 | 한글라벨 매칭 원료 | 배합비 검증 (순위/비율 필수) | 판정 및 수정안 |
-        |---|---|---|---|---|
-        (여기에 반드시 줄바꿈을 엄수하여 표 작성)
-        
-        ## 3️⃣ [서류 vs 시안 교차 검증 (알레르기 텍스트 추적)]
-        - 결론: (✅ 또는 🚨)
-        
-        ## 4️⃣ [영양표시 및 % 기준치 검증]
-        - 결론: (✅ 또는 🚨)
-        | 영양성분명 | 성적서 실측값 | 환산 실측값 | 시안 표시량 | 법적 허용오차 기준선 (계산식 포함) | 1일 기준치 | 시안 % | % 검증 | 판정 |
-        |---|---|---|---|---|---|---|---|---|
-        (여기에 반드시 줄바꿈을 엄수하여 표 작성)
-        
-        ## 5️⃣ [기타 법적 의무사항]
-        - 결론: (✅ 또는 🚨)
-        
-        ## 6️⃣ [외포장 vs 내포장 1:1 전수 대조 결과]
-        - 결론: (✅ 또는 🚨)
-        
-        ## 7️⃣ [종합의견 및 조치 필요사항]
-        (위반 사항 개조식 요약)
-        """
-
-        model = genai.GenerativeModel(MODEL_NAME, system_instruction=SYSTEM_PROMPT)
+        model = genai.GenerativeModel(MODEL_NAME)
         safety_settings = [
             {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_NONE"},
             {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_NONE"},
             {"category": "HARM_CATEGORY_SEXUALLY_EXPLICIT", "threshold": "BLOCK_NONE"},
             {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_NONE"}
         ]
-        
-        generation_config = genai.types.GenerationConfig(
-            temperature=0.0,
-            max_output_tokens=8192, 
-        )
-
-        st.markdown("### 📡 AI 정밀 검수 실시간 렌더링 중... (표 깨짐 방지 모드)")
-        
-        message_placeholder = st.empty()
-        full_response = ""
+        generation_config = genai.types.GenerationConfig(temperature=0.0, max_output_tokens=8192)
 
         try:
-            response = model.generate_content(
-                user_content + [final_prompt], 
-                generation_config=generation_config,
-                safety_settings=safety_settings,
-                stream=True 
-            )
-
-            for chunk in response:
-                if chunk.text:
-                    full_response += chunk.text
-                    time.sleep(0.01) 
-                    message_placeholder.markdown(full_response + "▌")
+            # ==========================================================
+            # 🟢 [1단계]: Thinking 에이전트 (원시 데이터 심층 추출 및 분석)
+            # ==========================================================
+            status_text.markdown("🧠 **[1/3 단계: Thinking]** 54대 룰북 원문을 기반으로 서류에서 모든 계산식과 데이터를 샅샅이 추출 중입니다...")
             
-            message_placeholder.empty()
+            prompt_step_1 = f"""
+            당신은 데이터 분석의 천재 'Thinking 에이전트'입니다.
+            업로드된 시안과 서류를 다음 [54대 룰북]에 따라 완벽하게 분석하십시오.
+            
+            [제품유형]: {product_type}
+            [검토모드]: {inspection_mode}
+            
+            {RULE_BOOK}
+            
+            [지시사항]
+            1. 절대 마크다운 표를 그리지 마십시오. 오직 분석 로그(텍스트)만 작성하십시오.
+            2. [원재료명 파트]: 시안에 적힌 원료, 한글라벨 원료, 배합비 서류의 원료와 '투입 순위(%)'를 하나도 빠짐없이 텍스트로 적어두십시오.
+            3. [영양성분 파트]: 9개 영양성분의 성적서 실측값, 환산 실측값, 시안 표시량, 그리고 식약처 허용오차 기준선 계산 수식을 직접 수학적으로 계산하여 적어두십시오.
+            4. 글이 끊기지 않게 핵심만 명확히 개조식으로 기록하십시오.
+            """
+            
+            res_1 = model.generate_content(user_content + [prompt_step_1], generation_config=generation_config, safety_settings=safety_settings)
+            thinking_log = res_1.text
+            progress_bar.progress(50)
 
-            thinking_match = re.search(r'<thinking>(.*?)</thinking>', full_response, re.DOTALL)
-            if thinking_match:
-                thinking_content = thinking_match.group(1).strip()
-                report_content = full_response.replace(thinking_match.group(0), "").strip()
-                
-                with st.expander("🧠 AI 교차 검증 스마트 로그 (핵심 수식 및 위반사항)"):
-                    st.markdown(f"*{thinking_content}*")
-                
-                st.markdown(report_content)
-            else:
-                st.markdown(full_response)
+            # ==========================================================
+            # 🔵 [2단계]: Review 에이전트 (검토 및 자가 교정)
+            # ==========================================================
+            status_text.markdown("🕵️ **[2/3 단계: 검토/Review]** 1단계 분석 로그의 계산 오류, 누락된 데이터, 54번 룰 위반 여부를 철저히 교차 검증 중입니다...")
+
+            prompt_step_2 = f"""
+            당신은 세상에서 가장 깐깐한 QC 'Review 에이전트'입니다.
+            앞선 Thinking 에이전트가 작성한 [1단계 분석 로그]를 읽고, 54대 룰북에 어긋나거나 누락된 부분이 없는지 교정하십시오.
+            
+            [1단계 분석 로그]
+            {thinking_log}
+            
+            [교정 지시사항]
+            1. '영양성분' 파트에서 1일 기준치 계산이 누락되었다면 직접 계산해서 채워 넣으십시오.
+            2. '원재료명' 파트에서 배합비 순위가 없다면 반드시 추가하십시오.
+            3. 교정이 완료된 완벽하고 깨끗한 [최종 분석 데이터] 텍스트만 출력하십시오. 표는 아직 그리지 마십시오.
+            """
+
+            res_2 = model.generate_content([prompt_step_2], generation_config=generation_config, safety_settings=safety_settings)
+            verified_log = res_2.text
+            progress_bar.progress(80)
+
+            # ==========================================================
+            # 🟣 [3단계]: Formatting 에이전트 (단계별 내용 및 표 정리)
+            # ==========================================================
+            status_text.markdown("📊 **[3/3 단계: 표 정리/Formatting]** 검증이 끝난 데이터를 바탕으로 7단계 최종 마크다운 리포트를 렌더링 중입니다...")
+
+            prompt_step_3 = f"""
+            당신은 마크다운 디자인 마스터 'Formatting 에이전트'입니다.
+            앞선 Review 에이전트가 완벽하게 교정한 [최종 분석 데이터]를 바탕으로 7단계 정식 리포트 표를 생성하십시오.
+            
+            [최종 분석 데이터]
+            {verified_log}
+            
+            🚨 [강제 렌더링 규칙] 🚨
+            1. 표 작성 시 반드시 행마다 엔터(줄바꿈)를 엄수하여 표가 깨지지 않도록 하십시오.
+            2. 데이터가 누락된 빈칸을 남기지 마십시오.
+            
+            [출력 양식]
+            모든 결론 앞에는 ✅(적합), 🚨(부적합), 🚨(확인 요망)을 붙이십시오.
+
+            ## 1️⃣ [주표시면 및 마케팅 뱃지]
+            - 결론: 
+            - 특이사항 요약: 
+            
+            ## 2️⃣ [원재료명 및 원산지 대조]
+            - 결론: 
+            | No | 시안 원재료명 | 한글라벨 매칭 원료 | 배합비 검증 (순위 필수) | 판정 및 수정안 |
+            |---|---|---|---|---|
+            (여기에 완벽한 줄바꿈으로 표 작성)
+            
+            ## 3️⃣ [서류 vs 시안 교차 검증 (알레르기 텍스트 추적)]
+            - 결론: 
+            
+            ## 4️⃣ [영양표시 및 % 기준치 검증]
+            - 결론: 
+            | 영양성분명 | 성적서 실측값 | 환산 실측값 | 시안 표시량 | 법적 허용오차 기준선 (계산식) | 1일 기준치 | 시안 % | % 검증 | 판정 |
+            |---|---|---|---|---|---|---|---|---|
+            (여기에 완벽한 줄바꿈으로 표 작성)
+            
+            ## 5️⃣ [기타 법적 의무사항]
+            - 결론: 
+            
+            ## 6️⃣ [외포장 vs 내포장 1:1 전수 대조 결과]
+            - 결론: 
+            
+            ## 7️⃣ [종합의견 및 조치 필요사항]
+            """
+
+            res_3 = model.generate_content([prompt_step_3], generation_config=generation_config, safety_settings=safety_settings)
+            
+            progress_bar.progress(100)
+            status_text.markdown("✨ **[완료]** 3단계 정밀 검증 파이프라인이 성공적으로 종료되었습니다.")
+            time.sleep(1)
+            
+            progress_bar.empty()
+            status_text.empty()
+
+            # UI 출력 구성
+            with st.expander("🧠 1단계 [Thinking] 및 2단계 [Review] 상세 로그 보기"):
+                st.markdown("### 1. Thinking 엔진 로그")
+                st.markdown(thinking_log)
+                st.markdown("---")
+                st.markdown("### 2. Review 엔진 교정 로그")
+                st.markdown(verified_log)
+            
+            st.markdown(res_3.text)
 
         except Exception as e:
-            st.error(f"🚨 시스템 런타임 오류 발생: {e}\n\n서버 트래픽 지연입니다. 새로고침(F5)하여 다시 시도해 주십시오.")
+            progress_bar.empty()
+            status_text.empty()
+            st.error(f"🚨 시스템 런타임 오류 발생: {e}\n\n서버 트래픽 지연입니다. 새로고침(F5) 후 다시 시도해 주십시오.")
 
 if __name__ == "__main__":
     if check_password(): main()
