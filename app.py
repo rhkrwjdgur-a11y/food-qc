@@ -36,7 +36,7 @@ genai.configure(api_key=API_KEY)
 MODEL_NAME = "gemini-2.5-flash" 
 
 # ==========================================
-# 📚 2. 통합 전문가 프롬프트 (54대 룰 상세 버전 완벽 복구)
+# 📚 2. 통합 전문가 프롬프트 (54대 룰 상세 버전)
 # ==========================================
 SYSTEM_PROMPT = """당신은 대한민국 최고의 '식품 표시사항 법규 및 품질관리(QC) 시스템'입니다.
 모든 검토 결과의 결론 앞에는 반드시 ✅(적합) 또는 🚨(부적합) 또는 🚨(확인 요망) 이모지를 붙이십시오.
@@ -244,7 +244,7 @@ def main():
     """
     st.markdown(print_css, unsafe_allow_html=True)
 
-    st.title("🏭 식품 표시사항 정밀 검토 시스템 (V21.0 - 청크 스트리밍 완결판)")
+    st.title("🏭 식품 표시사항 정밀 검토 시스템 (V22.0 - 토큰 최적화 및 표 복구판)")
     st.markdown("<hr class='hide-on-print'>", unsafe_allow_html=True)
 
     c_type, c_mode = st.columns(2)
@@ -303,7 +303,7 @@ def main():
                     time.sleep(1)
                 user_content.append(uploaded)
 
-        with st.spinner(f"파일 분석 및 54대 룰 셋팅 중... [{inspection_mode}]"):
+        with st.spinner(f"파일 분석 및 토큰 최적화 렌더링 준비 중... [{inspection_mode}]"):
             if img_main: process_single_file(img_main, "시안_외포장_주표시면")
             if img_info: process_single_file(img_info, "시안_외포장_정보표시면")
             if img_nutri: process_single_file(img_nutri, "시안_외포장_영양성분표")
@@ -328,33 +328,39 @@ def main():
         [제품유형]: {product_type}
         [검토모드]: {inspection_mode}
         
-        🚨 [출력 강제 명령 (꼼수 차단)] 🚨
+        🚨 [출력 토큰 과부하 방지 명령 (매우 중요!)] 🚨
         당신의 응답은 반드시 첫 글자를 `<thinking>` 으로 시작하십시오.
+        단, `<thinking>` 태그 내에서 54개 룰을 1번부터 54번까지 기계적으로 다 쓰면 메모리(토큰) 부족으로 최종 표가 잘립니다! 
+        따라서 **수학적 계산(영양소 오차 등), 원재료 매칭, 그리고 적발된 위반 사항 위주로만 깊이 있게 쓰고, 적합 판정된 단순 룰은 "Rule 1~10: 특이사항 없음" 식으로 묶어서 압축**하십시오. 그래야 표를 그릴 토큰이 남습니다.
         
         <thinking>
-        (여기에 54대 룰 전체에 대해 어떻게 검증했고, 허용오차 계산식의 결과값은 무엇인지 최대한 구체적으로 상세히 서술하십시오. 데이터가 없다고 임의로 퉁치는 행위를 엄격히 금지합니다.)
+        (핵심 검증 로직, 계산식, 위반 사항 위주로 상세하되, 통과된 단순 룰은 묶어서 압축 서술할 것)
         </thinking>
 
-        위의 사고 과정이 끝난 후, 아래의 7단계 마크다운 리포트를 본격적으로 출력하십시오.
-        2번과 4번 항목의 표를 작성할 때, 절대로 빈칸을 남기거나 "정보 없음"이라고 적지 마십시오. 성적서와 배합비 서류에서 숫자를 찾아내어 무조건 수학적으로 계산하여 채워 넣으십시오.
+        위의 사고 과정이 끝난 후, 아래의 7단계 리포트를 출력하십시오.
+        
+        🚨 [마크다운 표 렌더링 절대 강제 규칙] 🚨
+        2번과 4번 항목에서 표를 출력할 때, **절대로 한 줄에 모든 내용을 이어 쓰지 마십시오!** 표가 깨집니다.
+        반드시 각 행(Row)마다 마지막에 키보드 엔터(줄바꿈, `\\n`)를 쳐서 정상적인 표(Table) 형태로 렌더링되게 하십시오.
+        또한 표 안에 "정보 없음"이라고 적지 말고 서류에서 데이터를 기필코 찾아 채워 넣으십시오.
 
-        ## 1️⃣ [주표시면 및 마케팅 뱃지 (Rule 50, 52, 53 적용)]
+        ## 1️⃣ [주표시면 및 마케팅 뱃지]
         - 결론: (✅ 또는 🚨)
         
-        ## 2️⃣ [원재료명 및 원산지 대조 (Rule 48~54 적용)]
+        ## 2️⃣ [원재료명 및 원산지 대조]
         - 결론: (✅ 또는 🚨)
-        - 🚨 [배합비 순서 검증 칸 필수]: 1순위, 2순위 등 배합비율 순서를 반드시 적을 것.
         | No | 시안 원재료명 | 한글라벨 매칭 원료 | 배합비 검증 (순위/비율 필수) | 판정 및 수정안 |
         |---|---|---|---|---|
+        (여기에 반드시 줄바꿈을 엄수하여 표 작성)
         
         ## 3️⃣ [서류 vs 시안 교차 검증 (알레르기 텍스트 추적)]
         - 결론: (✅ 또는 🚨)
         
         ## 4️⃣ [영양표시 및 % 기준치 검증]
         - 결론: (✅ 또는 🚨)
-        - 🚨 [긴급 강제]: 성적서 실측값에 0.8 또는 1.2를 곱한 [법적 허용오차 기준선] 계산식을 빈칸 없이 100% 작성하십시오.
         | 영양성분명 | 성적서 실측값 | 환산 실측값 | 시안 표시량 | 법적 허용오차 기준선 (계산식 포함) | 1일 기준치 | 시안 % | % 검증 | 판정 |
         |---|---|---|---|---|---|---|---|---|
+        (여기에 반드시 줄바꿈을 엄수하여 표 작성)
         
         ## 5️⃣ [기타 법적 의무사항]
         - 결론: (✅ 또는 🚨)
@@ -374,15 +380,13 @@ def main():
             {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_NONE"}
         ]
         
-        # 무제한 출력 토큰 해제
         generation_config = genai.types.GenerationConfig(
             temperature=0.0,
             max_output_tokens=8192, 
         )
 
-        st.markdown("### 📡 AI 정밀 검수 실시간 렌더링 중...")
+        st.markdown("### 📡 AI 정밀 검수 실시간 렌더링 중... (표 깨짐 방지 모드)")
         
-        # 🚀 [V21.0 핵심] Chunk Streaming 방식으로 서버 프리징 방지
         message_placeholder = st.empty()
         full_response = ""
 
@@ -394,23 +398,20 @@ def main():
                 stream=True 
             )
 
-            # 한 글자씩이 아니라, 덩어리(chunk)로 받아서 UI 갱신 횟수를 확 줄임
             for chunk in response:
                 if chunk.text:
                     full_response += chunk.text
-                    # UI 렌더링 과부하를 막기 위해 아주 약간의 딜레이를 줌
                     time.sleep(0.01) 
                     message_placeholder.markdown(full_response + "▌")
             
             message_placeholder.empty()
 
-            # <thinking> 태그 숨기기
             thinking_match = re.search(r'<thinking>(.*?)</thinking>', full_response, re.DOTALL)
             if thinking_match:
                 thinking_content = thinking_match.group(1).strip()
                 report_content = full_response.replace(thinking_match.group(0), "").strip()
                 
-                with st.expander("🧠 AI 교차 검증 상세 추론 로그 (Raw Data)"):
+                with st.expander("🧠 AI 교차 검증 스마트 로그 (핵심 수식 및 위반사항)"):
                     st.markdown(f"*{thinking_content}*")
                 
                 st.markdown(report_content)
@@ -418,7 +419,7 @@ def main():
                 st.markdown(full_response)
 
         except Exception as e:
-            st.error(f"🚨 시스템 런타임 오류 발생: {e}\n\n서버 트래픽 지연입니다. 5초 후 새로고침(F5)하여 다시 시도해 주십시오.")
+            st.error(f"🚨 시스템 런타임 오류 발생: {e}\n\n서버 트래픽 지연입니다. 새로고침(F5)하여 다시 시도해 주십시오.")
 
 if __name__ == "__main__":
     if check_password(): main()
