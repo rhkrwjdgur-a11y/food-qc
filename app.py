@@ -40,11 +40,12 @@ MODEL_NAME = "gemini-2.5-flash"
 # ==========================================
 SYSTEM_PROMPT = """당신은 대한민국 최고의 '식품 표시사항 법규 및 품질관리(QC) 시스템'입니다.
 모든 검토 결과의 결론 앞에는 반드시 ✅(적합) 또는 🚨(부적합) 또는 🚨(확인 요망) 이모지를 붙이십시오.
-제공된 법령(고시)과 사용자가 업로드한 자료들을 교차 검증하십시오. 문서에 없는 데이터를 임의로 생성(Hallucination)하는 것을 엄격히 통제합니다.
+제공된 법령(고시)과 업로드한 자료들을 교차 검증하되, 문서에 없는 데이터를 임의로 지어내는(Hallucination) 것을 엄격히 통제합니다.
 
-## 🚨 [⚖️ 1일 영양성분 기준치]
+## 🚨 [⚖️ 1일 영양성분 기준치 (비율 계산 규칙)]
 - 열량 2000kcal, 탄수화물 324g, 당류 100g, 단백질 55g, 지방 54g, 포화지방 15g, 트랜스지방 0g, 콜레스테롤 300mg, 나트륨 2000mg
-- 비타민A 700ugRE, 비타민C 100mg, 비타민D 10ug, 비타민E 11mga-TE, 칼슘 700mg, 아연 8.5mg, 철분 12mg
+- **[비율(%) 표기]:** 소수점 첫째 자리에서 반올림하여 정수(1% 단위)로 표시.
+- **[1% 미만 표기]:** 계산값이 1% 미만인 경우 0%가 아니라 **"1% 미만"** 텍스트로 표시 (0g 규정에 해당하여 0g으로 적힌 경우에만 0% 표기).
 
 [54대 품질관리 지침]
 Rule 1. 정제수, 주정, 당류, 식품첨가물은 원산지 3순위 산정에서 100% 제외.
@@ -120,7 +121,7 @@ def main():
     """
     st.markdown(print_css, unsafe_allow_html=True)
 
-    st.title("🏭 식품 표시사항 정밀 검토 시스템 (V30.0 - 백그라운드 추론 복구판)")
+    st.title("🏭 식품 표시사항 정밀 검토 시스템 (V32.0 - 100% 정밀 대조판)")
     st.markdown("<hr class='hide-on-print'>", unsafe_allow_html=True)
 
     with st.sidebar:
@@ -171,6 +172,7 @@ def main():
             return None
             
         model = genai.GenerativeModel(MODEL_NAME, system_instruction=SYSTEM_PROMPT)
+        # 출력 토큰 넉넉하게 설정 (최대치)
         generation_config = genai.types.GenerationConfig(temperature=0.0, max_output_tokens=8192)
         safety_settings = [
             {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_NONE"},
@@ -183,29 +185,15 @@ def main():
         [제품유형]: {product_type}
         [검토모드]: {inspection_mode}
         
-        🚨 [사전 연산(Thinking) 강제 명령 - 정확성 확보] 🚨
-        당신은 본 리포트의 마크다운 표를 그리기 전에, 반드시 첫 글자를 `<thinking>` 태그로 열어서 각 룰에 대한 데이터 매칭과 수식 계산 과정을 명확히 기록하십시오. 이 과정을 생략하면 계산 오류가 발생합니다.
-        
-        <thinking>
-        (여기에 데이터 추출 결과 및 허용오차 산술 연산 과정 상세 기록)
-        </thinking>
-        
-        🚨 [표 렌더링 절대 강제 규칙 - 표 깨짐 방지] 🚨
-        사고 과정이 끝난 후 아래의 정식 리포트를 출력할 때, 표(Table)는 절대 한 줄로 이어서 쓰면 안 됩니다.
-        
-        [🟢 올바른 표 작성 예시 - 반드시 행마다 엔터(Enter)를 칠 것]
-        | No | 원료명 | 판정 |
-        |---|---|---|
-        | 1 | 정제수 | 적합 |
-        | 2 | 사과 | 적합 |
-        
-        [❌ 절대 금지 예시 - 이렇게 쓰면 시스템 에러가 발생합니다]
-        | No | 원료명 | 판정 | |---|---|---| | 1 | 정제수 | 적합 |
+        🚨 [표 렌더링 절대 강제 규칙 - 표 깨짐 원천 차단] 🚨
+        1. 표(Table)를 그릴 때 무조건 행(Row)마다 **엔터(Enter, 줄바꿈)**를 치십시오.
+        2. 표를 한 줄의 텍스트로 이어 붙여 쓰면 시스템 에러가 발생합니다.
         
         {prompt_text}
         """
         
         try:
+            # 쾌적한 출력을 위해 스트리밍(stream) 대신 One-shot 적용
             response = model.generate_content(content + [full_prompt], generation_config=generation_config, safety_settings=safety_settings)
             return response.text
         except Exception as e:
@@ -220,7 +208,7 @@ def main():
     with tab1:
         st.info("주표시면 이미지와 배합비를 대조하여 마케팅 문구, 함량 표기, 제품명 연동 규정 등을 검토합니다.")
         if st.button("▶️ 주표시면 분석 시작", key="btn_main"):
-            with st.spinner("주표시면 마케팅 문구 및 뱃지 분석 중..."):
+            with st.spinner("주표시면 텍스트 및 뱃지 정밀 대조 중..."):
                 prompt = """
                 ## 1️⃣ [주표시면 및 마케팅 뱃지]
                 - 결론: (✅ 적합 또는 🚨 부적합/확인요망)
@@ -230,31 +218,25 @@ def main():
                 - 기타 특이사항: 
                 """
                 result = run_qc_model(prompt)
-                if result:
-                    thinking_match = re.search(r'<thinking>(.*?)</thinking>', result, re.DOTALL)
-                    if thinking_match:
-                        thinking_log = thinking_match.group(1).strip()
-                        report_content = result.replace(thinking_match.group(0), "").strip()
-                        with st.expander("🧠 AI 백그라운드 추론 연산 과정 (로그 보기)"):
-                            st.markdown(f"*{thinking_log}*")
-                        st.markdown(report_content)
-                    else:
-                        st.markdown(result)
+                if result: st.markdown(result)
 
     # ==========================================================
-    # 탭 2: 정보표시면 검토
+    # 탭 2: 정보표시면 검토 (이중 작성 금지, 100% 베껴쓰기)
     # ==========================================================
     with tab2:
-        st.info("정보표시면 이미지와 한글라벨, 배합비를 대조하여 원재료명, 원산지, 알레르기 유발물질을 검토합니다.")
-        if st.button("▶️ 정보표시면 분석 시작", key="btn_info"):
-            with st.spinner("원재료 매칭 및 알레르기 교차오염 분석 중... (표 렌더링)"):
+        st.info("정보표시면 이미지와 한글라벨, 배합비를 대조하여 원재료명, 원산지, 알레르기를 토씨 하나 안 틀리고 전수 검토합니다.")
+        if st.button("▶️ 정보표시면 원재료 100% 대조 시작", key="btn_info"):
+            with st.spinner("서류의 품번 및 상세 내역을 표에 다이렉트로 옮겨 적는 중..."):
                 prompt = """
+                🚨 [원재료명 파트 특별 명령 - 이중 작성 금지 & 100% 베껴쓰기] 🚨
+                1. 원재료 파트는 산술 계산이 필요 없으므로 `<thinking>` 태그를 사용하지 마십시오.
+                2. 서류(배합비, 한글라벨)에 적힌 **향료의 품번(예: JW3-241825 등), 복잡한 스펙, 괄호 안의 원산지**를 단 한 글자도 요약하거나 빼먹지 말고 **100% 완벽하게 그대로 복사해서** 아래 표의 '서류 매칭 원료' 칸에 집어넣으십시오. QC 검수는 정확한 글자 대조가 생명입니다.
+                
                 ## 2️⃣ [원재료명 및 원산지 대조]
                 - 결론: (✅ 적합 또는 🚨 부적합)
-                
-                (반드시 위의 🟢올바른 표 작성 예시를 참고하여 각 행마다 완벽히 줄바꿈을 적용하여 그리십시오. '배합비 검증' 칸에 투입 순위 필수 기입)
-                | No | 시안 원재료명 | 한글라벨 매칭 원료 | 배합비 검증 (투입 순위 필수) | 판정 및 수정안 |
+                | No | 시안 원재료명 | 서류 매칭 원료 (품번, 상세 스펙 100% 기재) | 배합비 검증 (투입 순위 필수) | 판정 및 사유 |
                 |---|---|---|---|---|
+                (여기에 표 작성 시 행마다 줄바꿈 필수)
                 
                 ## 3️⃣ [서류 vs 시안 교차 검증 (알레르기 텍스트 추적)]
                 - 결론: (✅ 적합 또는 🚨 부적합)
@@ -262,39 +244,39 @@ def main():
                 - 교차오염 경고 중복/모순 여부:
                 """
                 result = run_qc_model(prompt)
-                if result:
-                    thinking_match = re.search(r'<thinking>(.*?)</thinking>', result, re.DOTALL)
-                    if thinking_match:
-                        thinking_log = thinking_match.group(1).strip()
-                        report_content = result.replace(thinking_match.group(0), "").strip()
-                        with st.expander("🧠 AI 백그라운드 추론 연산 과정 (로그 보기)"):
-                            st.markdown(f"*{thinking_log}*")
-                        st.markdown(report_content)
-                    else:
-                        st.markdown(result)
+                if result: st.markdown(result)
 
     # ==========================================================
     # 탭 3: 영양성분표 검토
     # ==========================================================
     with tab3:
-        st.info("영양성분표 이미지와 시험성적서를 대조하여 9대 영양소의 허용오차율 및 식약처 1일 기준치를 깐깐하게 계산합니다.")
-        if st.button("▶️ 영양성분표 분석 시작", key="btn_nutri"):
-            with st.spinner("영양성분 허용오차 및 기준치를 계산 중입니다... (표 렌더링)"):
+        st.info("영양성분표 이미지와 시험성적서를 대조하여 9대 영양소의 허용오차율 및 식약처 1일 기준치를 계산합니다.")
+        if st.button("▶️ 영양성분표 오차 정밀 연산 시작", key="btn_nutri"):
+            with st.spinner("영양성분 오차 수식 계산 및 표 렌더링 중..."):
                 prompt = """
+                🚨 [영양성분 파트 특별 명령 - 계산식 전용 Thinking] 🚨
+                1. 영양성분 파트는 정확한 수학적 검증을 위해 반드시 `<thinking>` 태그를 열고, 각 성분에 대한 허용오차 기준선 계산(0.8배, 1.2배)만 간략히 수행하십시오.
+                2. 불필요하게 텍스트를 길게 쓰지 말고 수식만 적은 후 바로 닫으십시오.
+                
+                <thinking>
+                (여기에 9개 성분의 허용오차 기준선 계산식만 간략하게 작성)
+                </thinking>
+                
                 ## 4️⃣ [영양표시 및 % 기준치 검증]
                 - 결론: (✅ 적합 또는 🚨 부적합)
                 
-                (반드시 위의 🟢올바른 표 작성 예시를 참고하여 각 행마다 완벽히 줄바꿈을 적용하여 그리십시오. 계산 수식 명시)
+                (여기에 위에서 계산한 결과를 바탕으로 표 작성. "정보 없음" 금지. 각 행마다 줄바꿈 필수)
                 | 영양성분명 | 성적서 실측값 | 시안 표시량 | 법적 허용오차 기준선 | 1일 기준치 | 시안 % | % 검증 | 판정 |
                 |---|---|---|---|---|---|---|---|
                 """
                 result = run_qc_model(prompt)
                 if result:
+                    # <thinking> 태그 분리 및 아코디언 처리
                     thinking_match = re.search(r'<thinking>(.*?)</thinking>', result, re.DOTALL)
                     if thinking_match:
                         thinking_log = thinking_match.group(1).strip()
                         report_content = result.replace(thinking_match.group(0), "").strip()
-                        with st.expander("🧠 AI 백그라운드 추론 연산 과정 (로그 보기)"):
+                        with st.expander("🧠 영양소 허용오차 기준선 산술 연산 로그 보기"):
                             st.markdown(f"*{thinking_log}*")
                         st.markdown(report_content)
                     else:
