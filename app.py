@@ -247,7 +247,7 @@ def main():
     """
     st.markdown(print_css, unsafe_allow_html=True)
 
-    st.title("🏭 식품 표시사항 정밀 검토 시스템 (V33.0 - 상세 룰북 원상복구판)")
+    st.title("🏭 식품 표시사항 정밀 검토 시스템 (V35.0 - 기타면 추가 및 룰 복구판)")
     st.markdown("<hr class='hide-on-print'>", unsafe_allow_html=True)
 
     with st.sidebar:
@@ -259,6 +259,7 @@ def main():
         img_main = st.file_uploader("1️⃣ 주표시면(앞면)", type=["jpg", "png", "jpeg"])
         img_info = st.file_uploader("2️⃣ 정보표시면(뒷면)", type=["jpg", "png", "jpeg"])
         img_nutri = st.file_uploader("3️⃣ 영양성분표", type=["jpg", "png", "jpeg"])
+        img_extra = st.file_uploader("4️⃣ 기타면/측면 (선택)", type=["jpg", "png", "jpeg"])
         
         st.markdown("---")
         report_docs = st.file_uploader("📑 시험성적서", type=["pdf", "jpg", "png"], accept_multiple_files=True)
@@ -281,6 +282,7 @@ def main():
         if img_main: process(img_main, "시안_주표시면")
         if img_info: process(img_info, "시안_정보표시면")
         if img_nutri: process(img_nutri, "시안_영양성분표")
+        if img_extra: process(img_extra, "시안_기타면_측면")
         if report_docs: 
             for f in report_docs: process(f, "근거_시험성적서")
         if recipe_docs: 
@@ -298,7 +300,6 @@ def main():
             return None
             
         model = genai.GenerativeModel(MODEL_NAME, system_instruction=SYSTEM_PROMPT)
-        # 출력 토큰 넉넉하게 설정 (최대치)
         generation_config = genai.types.GenerationConfig(temperature=0.0, max_output_tokens=8192)
         safety_settings = [
             {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_NONE"},
@@ -325,7 +326,7 @@ def main():
             return f"🚨 시스템 런타임 오류 발생: {e}"
 
     st.markdown("### 🔍 시안 구간별 정밀 검토")
-    tab1, tab2, tab3 = st.tabs(["1️⃣ 주표시면 (마케팅/뱃지)", "2️⃣ 정보표시면 (원재료/알레르기)", "3️⃣ 영양성분표 (오차 연산)"])
+    tab1, tab2, tab3, tab4 = st.tabs(["1️⃣ 주표시면 (마케팅/뱃지)", "2️⃣ 정보표시면 (원재료/알레르기)", "3️⃣ 영양성분표 (오차 연산)", "4️⃣ 기타면/측면 (추가 마케팅)"])
 
     # ==========================================================
     # 탭 1: 주표시면 검토
@@ -335,27 +336,31 @@ def main():
         if st.button("▶️ 주표시면 분석 시작", key="btn_main"):
             with st.spinner("주표시면 텍스트 및 뱃지 정밀 대조 중..."):
                 prompt = """
+                🚨 [오지랖 금지 명령]: 당신은 오직 '주표시면(앞면)과 마케팅 문구'만 검증해야 합니다. 원재료명, 알레르기, 영양성분표 계산 등 다른 탭에서 해야 할 일을 절대 이곳에 출력하지 마십시오.
+                
                 ## 1️⃣ [주표시면 및 마케팅 뱃지]
                 - 결론: (✅ 적합 또는 🚨 부적합/확인요망)
                 - 100% 원액 강조 적합성: 
                 - 마케팅 숫자(N종, N곡 등) 정합성: 
                 - 제품명 연동 함량(%) 표기 여부: 
-                - 기타 특이사항: 
+                - 기타 특이사항 (과장광고 등): 
                 """
                 result = run_qc_model(prompt)
                 if result: st.markdown(result)
 
     # ==========================================================
-    # 탭 2: 정보표시면 검토 (이중 작성 금지, 100% 베껴쓰기)
+    # 탭 2: 정보표시면 검토
     # ==========================================================
     with tab2:
-        st.info("정보표시면 이미지와 한글라벨, 배합비를 대조하여 원재료명, 원산지, 알레르기를 토씨 하나 안 틀리고 전수 검토합니다.")
+        st.info("정보표시면 이미지와 한글라벨, 배합비를 대조하여 원재료명, 원산지, 알레르기를 전수 검토합니다.")
         if st.button("▶️ 정보표시면 원재료 100% 대조 시작", key="btn_info"):
             with st.spinner("서류의 품번 및 상세 내역을 표에 다이렉트로 옮겨 적는 중..."):
                 prompt = """
+                🚨 [오지랖 금지 명령]: 당신은 오직 '원재료명, 원산지, 알레르기'만 검증해야 합니다. 주표시면 마케팅이나 영양성분 오차 계산 등 다른 탭에서 해야 할 일을 절대 이곳에 출력하지 마십시오.
+                
                 🚨 [원재료명 파트 특별 명령 - 이중 작성 금지 & 100% 베껴쓰기] 🚨
                 1. 원재료 파트는 산술 계산이 필요 없으므로 `<thinking>` 태그를 사용하지 마십시오.
-                2. 서류(배합비, 한글라벨)에 적힌 **향료의 품번(예: JW3-241825 등), 복잡한 스펙, 괄호 안의 원산지**를 단 한 글자도 요약하거나 빼먹지 말고 **100% 완벽하게 그대로 복사해서** 아래 표의 '서류 매칭 원료' 칸에 집어넣으십시오. QC 검수는 정확한 글자 대조가 생명입니다.
+                2. 서류(배합비, 한글라벨)에 적힌 향료의 품번(예: JW3-241825 등), 복잡한 스펙, 괄호 안의 원산지를 단 한 글자도 요약하지 말고 **100% 완벽하게 그대로 복사해서** 아래 표의 '서류 매칭 원료' 칸에 집어넣으십시오. 
                 
                 ## 2️⃣ [원재료명 및 원산지 대조]
                 - 결론: (✅ 적합 또는 🚨 부적합)
@@ -379,33 +384,53 @@ def main():
         if st.button("▶️ 영양성분표 오차 정밀 연산 시작", key="btn_nutri"):
             with st.spinner("영양성분 오차 수식 계산 및 표 렌더링 중..."):
                 prompt = """
+                🚨 [오지랖 금지 명령]: 당신은 오직 '9대 영양성분표와 오차율 계산'만 검증해야 합니다. 룰 19번, 24번 같은 마케팅 규정이나 주표시면 뱃지, 원재료명 등에 대한 일반적인 리뷰를 절대, 네버, 이곳에 출력하지 마십시오.
+                
                 🚨 [영양성분 파트 특별 명령 - 계산식 전용 Thinking] 🚨
-                1. 영양성분 파트는 정확한 수학적 검증을 위해 반드시 `<thinking>` 태그를 열고, 각 성분에 대한 허용오차 기준선 계산(0.8배, 1.2배)만 간략히 수행하십시오.
-                2. 불필요하게 텍스트를 길게 쓰지 말고 수식만 적은 후 바로 닫으십시오.
+                1. 오직 영양성분 오차(0.8배, 1.2배) 계산과 1일 기준치 비율(%) 계산만을 위해 `<thinking>` 태그를 여십시오. 다른 룰에 대한 생각은 텍스트로 적지 마십시오.
                 
                 <thinking>
-                (여기에 9개 성분의 허용오차 기준선 계산식만 간략하게 작성)
+                (여기에 9개 성분의 오차율 및 비율 산술 계산식만 간략히 작성)
                 </thinking>
                 
                 ## 4️⃣ [영양표시 및 % 기준치 검증]
                 - 결론: (✅ 적합 또는 🚨 부적합)
                 
-                (여기에 위에서 계산한 결과를 바탕으로 표 작성. "정보 없음" 금지. 각 행마다 줄바꿈 필수)
-                | 영양성분명 | 성적서 실측값 | 시안 표시량 | 법적 허용오차 기준선 | 1일 기준치 | 시안 % | % 검증 | 판정 |
+                (여기에 위에서 계산한 결과를 바탕으로 9개 성분 표 작성. 행마다 줄바꿈 필수)
+                | 영양성분명 | 성적서 실측값 | 시안 표시량 | 법적 허용오차 기준선 (수식포함) | 1일 기준치 | 시안 % | % 검증 | 판정 |
                 |---|---|---|---|---|---|---|---|
                 """
                 result = run_qc_model(prompt)
                 if result:
-                    # <thinking> 태그 분리 및 아코디언 처리
                     thinking_match = re.search(r'<thinking>(.*?)</thinking>', result, re.DOTALL)
                     if thinking_match:
                         thinking_log = thinking_match.group(1).strip()
                         report_content = result.replace(thinking_match.group(0), "").strip()
-                        with st.expander("🧠 영양소 허용오차 기준선 산술 연산 로그 보기"):
+                        with st.expander("🧠 영양소 산술 연산 로그 보기 (마케팅 리뷰 배제)"):
                             st.markdown(f"*{thinking_log}*")
                         st.markdown(report_content)
                     else:
                         st.markdown(result)
+
+    # ==========================================================
+    # 탭 4: 기타면/측면 검토 (신규 추가)
+    # ==========================================================
+    with tab4:
+        st.info("선물용 박스, 트레이, 파우치 등의 기타면/측면 이미지에 표기된 마케팅 문구 및 함량 표기를 추가 검증합니다.")
+        if st.button("▶️ 기타면/측면 분석 시작", key="btn_extra"):
+            with st.spinner("기타면/측면 텍스트 및 마케팅 적합성 검토 중..."):
+                prompt = """
+                🚨 [오지랖 금지 명령]: 당신은 오직 '기타면/측면(Extra) 이미지'에 나타난 마케팅 문구, 영양 강조, 기타 표시사항만 검증해야 합니다. 주표시면, 정보표시면 등 다른 탭에서 이미 완료한 내용을 반복하여 출력하지 마십시오.
+                
+                ## 5️⃣ [기타면/측면 표시사항 및 마케팅 뱃지]
+                - 결론: (✅ 적합 또는 🚨 부적합/확인요망)
+                - 추가 마케팅 문구 및 숫자(N종, N곡 등) 정합성: 
+                - 건강기능식품 오인, 무첨가 강조 등 규정 위반 여부:
+                - 제품명/원료 함량 강조 적합성:
+                - 기타 특이사항: 
+                """
+                result = run_qc_model(prompt)
+                if result: st.markdown(result)
 
 if __name__ == "__main__":
     if check_password(): main()
