@@ -33,7 +33,7 @@ else:
     API_KEY = os.environ.get("GOOGLE_API_KEY")
 
 genai.configure(api_key=API_KEY)
-# ✅ 버벅임 해결 및 복잡한 연산을 위해 Pro 모델로 상향 적용
+# ✅ 버벅임 해결 및 복잡한 연산, 하위 전개 분기 처리를 위해 Pro 모델 적용
 MODEL_NAME = "gemini-2.5-pro" 
 
 # ==========================================
@@ -56,7 +56,7 @@ SYSTEM_PROMPT = """당신은 대한민국 최고의 '식품 표시사항 법규 
 제공된 법령(고시)과 사용자가 업로드한 자료들을 빠짐없이 전부 읽고 교차 검증하십시오. 문서에 없는 데이터를 임의로 지어내는 환각(Hallucination)을 엄격히 통제합니다."""
 
 # ==========================================
-# 📚 3. 55대 룰북 원문 (단 한 글자도 생략/축소 금지! 100% 상세 풀텍스트 영구 보존판)
+# 📚 3. 55대 룰북 원문 (단 한 글자도 생략/축소 금지!)
 # ==========================================
 RULE_BOOK = """
 # [식품 패키지 표시사항 QC 자동화 검수 시스템 룰북]
@@ -248,7 +248,7 @@ RULE_BOOK = """
    - [면제 대상]: 코코아분말, 초콜릿, 커피, 주정, 첨가물 등 다빈도 단순 가공품이나 첨가물인 경우에만 원산지 누락이 합법(✅)입니다. 견과류 등은 절대 면제되지 않습니다.
 
 🔥 **Rule 54. [복수 원산지 혼합 비율 생략 합법성 검증 룰]**
-   - 정보표시면 원재료명에 단일 원료에 대해 2개 이상의 국가가 쉼표(,)로 병기되어 있고(예: 가나산, 에콰도르산), **각 국가별 혼합 비율(%)이 기재되어 있지 않은 경우** 덮어놓고 적합(✅)으로 판정하지 마십시오. 반드시 🚨(확인 요망) 플래그를 띄우고 부서 확인을 지시하십시오.
+   - 정보표시면 원재료명에 단일 원료에 대해 2개 정국가가 쉼표(,)로 병기되어 있고(예: 가나산, 에콰도르산), **각 국가별 혼합 비율(%)이 기재되어 있지 않은 경우** 덮어놓고 적합(✅)으로 판정하지 마십시오. 반드시 🚨(확인 요망) 플래그를 띄우고 부서 확인을 지시하십시오.
 
 🔥 **Rule 55. [영양성분 소수점 및 반올림 강제 규정]**
    - 포화지방 5g 이상은 소수점 없이 정수로, 트랜스지방 0.2g 미만은 소수점 없이 0g으로 표시해야 합니다. 시안에 소수점이 기재되어 있다면(예: 8.0g ➔ 8g 수정 필요 / 0.0g ➔ 0g 수정 필요) 부적합(🚨) 처리하십시오.
@@ -266,7 +266,7 @@ def main():
     if "result_tab4" not in st.session_state: st.session_state["result_tab4"] = None
     if "result_summary" not in st.session_state: st.session_state["result_summary"] = None
     
-    # ✅ 버벅임 방지를 위한 업로드 파일 캐시 초기화
+    # ✅ 업로드 파일 캐시 초기화 (버벅임 원천 차단)
     if "uploaded_content" not in st.session_state: st.session_state["uploaded_content"] = None
 
     print_css = """
@@ -280,7 +280,7 @@ def main():
     """
     st.markdown(print_css, unsafe_allow_html=True)
 
-    st.title("🏭 식품 표시사항 정밀 검토 시스템 (V86.0 - 55룰 복구 & 최적화 유지)")
+    st.title("🏭 식품 표시사항 정밀 검토 시스템 (V87.0 - 전 구간 OCR <thinking> & 하위성분 분기 로직 적용)")
     st.markdown("<hr class='hide-on-print'>", unsafe_allow_html=True)
 
     with st.sidebar:
@@ -344,7 +344,7 @@ def main():
             for f in glob.glob("temp_*"): os.remove(f)
             return user_content
 
-        # ✅ 수정사항 1: 사이드바에서 파일을 1회만 업로드(캐싱)하도록 버튼 추가
+        # ✅ 수정 1: 파일 업로드 캐싱 확정 버튼 (중복 업로드 방지)
         st.markdown("---")
         if st.button("🚀 업로드된 파일 시스템에 등록 (필수)"):
             with st.spinner("파일을 AI 시스템에 연동 중입니다... (최초 1회만 실행)"):
@@ -352,18 +352,15 @@ def main():
                 st.success("✅ 파일 등록 완료! 이제 우측 탭에서 검토를 시작하세요.")
 
     def run_qc_model(prompt_text):
-        # ✅ 수정사항 2: 매번 업로드하지 않고 캐싱된 데이터를 불러옴 (버벅임 차단)
         if not st.session_state["uploaded_content"]:
             st.warning("🚨 좌측 사이드바 하단의 [🚀 업로드된 파일 시스템에 등록] 버튼을 먼저 눌러주세요.")
             return None
             
         content = st.session_state["uploaded_content"]
-        
         model = genai.GenerativeModel(MODEL_NAME, system_instruction=SYSTEM_PROMPT)
         
-        # ✅ 수정사항 3: 8,000자 제한 해제 (max_output_tokens를 65536으로 확장)
+        # ✅ 수정 2: 8,000자 제한 해제 (최대 토큰 65536으로 확장)
         generation_config = genai.types.GenerationConfig(temperature=0.0, max_output_tokens=65536)
-        
         safety_settings = [
             {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_NONE"},
             {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_NONE"},
@@ -400,45 +397,63 @@ def main():
 
     with tab1:
         if st.button("▶️ 주표시면 분석 시작", key="btn_main"):
-            with st.spinner("주표시면 텍스트 정밀 대조 중..."):
+            with st.spinner("주표시면 텍스트 추출 및 정밀 대조 중..."):
                 prompt = """
                 [지시]: 오직 '주표시면'에 대한 리뷰만 출력하십시오. 
                 <thinking>
-                마케팅 문구 적합성, 감미료 위치, 마케팅 숫자(Rule 52 나트륨 제외 필수) 등을 체크하십시오.
+                1. 이미지 판독: 주표시면에 적힌 모든 큰 글씨, 마케팅 뱃지, 하단 설명 문구를 빠짐없이 그대로 타이핑하십시오.
+                2. 키워드 스캔: 추출된 텍스트 안에 '원액', '100%', '제로', '무당', 숫자(N종, N곡 등)가 포함되어 있는지 확인하십시오.
+                3. 룰 매칭: 위 키워드가 있다면 Rule 24, Rule 50, Rule 52 등을 적용하여 판단하십시오.
                 </thinking>
                 ## 1️⃣ [주표시면 및 마케팅 뱃지]
                 - 결론: (✅ 적합 또는 🚨 부적합/확인요망)
                 - 🚨 [Rule 24] 감미료 함유 문구 위치 적합성: 
-                - 100% 원액 및 고형분 강조 적합성: 
-                - 마케팅 숫자(N종, N곡 등) 정합성: 
+                - [Rule 50] 100% 원액 및 고형분 강조 적합성: 
+                - [Rule 52] 마케팅 숫자(N종, N곡 등) 정합성: 
                 - 제품명 연동 함량(%) 표기 여부: 
                 - 기타 특이사항: 
                 """
                 st.session_state["result_tab1"] = run_qc_model(prompt)
 
         if st.session_state["result_tab1"]:
-            st.markdown(st.session_state["result_tab1"])
+            result = st.session_state["result_tab1"]
+            thinking_match = re.search(r'<thinking>(.*?)</thinking>', result, re.DOTALL)
+            if thinking_match:
+                thinking_log = thinking_match.group(1).strip()
+                report_content = result.replace(thinking_match.group(0), "").strip()
+                with st.expander("🧠 사전 판독/스캔 로그 보기"):
+                    st.markdown(f"*{thinking_log}*")
+                st.markdown(report_content)
+            else:
+                st.markdown(result)
 
     with tab2:
-        if st.button("▶️ 정보표시면 원재료 1:1 맵핑 시작", key="btn_info"):
-            with st.spinner("모든 원재료를 생략 없이 100% 표에 전개하는 중입니다..."):
+        if st.button("▶️ 정보표시면 원재료 서류 1:1 맵핑 시작", key="btn_info"):
+            with st.spinner("서류 기준 하위성분 전개 및 100% 맵핑 중입니다..."):
                 if inspection_mode == "선물세트 박스(외포장) 교차 검토":
                     prompt = """
                     [지시]: '선물세트 박스 교차 검토' 모드입니다.
-                    업로드된 **[근거_서류]**를 기준으로, **[타겟_시안(박스)]**과 **[비교용_정답지_시안(팩)]**의 원재료명이 완벽하게 일치하는지 대조하십시오.
+                    
+                    <thinking>
+                    1. 서류 분석 (절대 기준점 도출): 업로드된 **[근거_서류(배합비/한글라벨 자료)]**를 철저히 분석하여, 패키지에 기재되어야 할 '정답 원재료명 리스트'를 작성하십시오.
+                    2. 🚨 [식품유형별 맞춤 전개 로직 적용]: 프롬프트 상단에 입력된 [제품유형] 값을 확인하십시오.
+                       - 만약 **[일반식품]**이라면: 복합원재료 5% 미만 생략(Rule 5) 및 식품첨가물 주용도 묶음 표기 허용(Rule 14) 규정을 적용하여, 합법적인 선에서 묶음/생략을 허용하여 대조하십시오.
+                       - 만약 **[특수의료용도식품 / 환자식]**이라면: 일반식품의 예외를 적용하지 마십시오. 서류에 기재된 영양강화제, 혼합제제, 복합원재료 등의 **하위 세부 성분을 단 하나도 묶지 말고 100% 낱낱이 전개(해체)**하여 리스트업 하십시오.
+                    3. 3방향 교차 대조: 도출된 '서류상 정답 리스트'를 기준으로, **[타겟_시안(박스)]**과 **[비교용_정답지_시안(팩)]**의 원재료명 및 전개 내역이 정확히 일치하는지 교차 검증하십시오.
+                    </thinking>
                     
                     🚨 [표 작성 필수 명령] 🚨
-                    1. 1번 원재료부터 마지막 원재료까지 **단 1개도 생략하지 말고 모두 표의 개별 행(Row)으로 작성**하십시오.
-                    2. 복합원재료의 괄호() 안의 쉼표(,)는 절대 행 분리 기준이 아닙니다. 복합원재료는 한 줄로 묶으십시오.
+                    1. 표의 첫 번째 열인 '서류 매칭 원료'는 시안의 글자가 아니라, **[근거_서류]를 바탕으로 식품유형 전개 로직에 맞춰 도출한 정답 원재료명**이어야 합니다.
+                    2. 도출된 정답 리스트의 모든 원료를 생략 없이 표의 개별 행(Row)으로 분리하여 작성하십시오.
                     
-                    ## 2️⃣ [서류 기준: 박스(외포장) vs 팩(내포장) 전수 대조 결과]
+                    ## 2️⃣ [원재료명 정밀 교차 검증 (서류 vs 박스 시안 vs 팩 시안)]
                     - 결론: (✅ 적합 또는 🚨 부적합)
                     
-                    | 서류 매칭 원료 (기준) | 타겟(박스) vs 비교용(팩) 교차 대조 | 판정 |
+                    | 서류 바탕 정답 원재료명 (식품유형별 전개 반영) | 타겟(박스) 및 비교용(팩) 시안 대조 결과 | 판정 |
                     |---|---|---|
-                    | (예: 정제수) | ✅ 박스/팩 100% 일치 | ✅ |
-                    | (예: 분리대두단백) | 🚨 팩에는 있으나 박스에서 누락됨 | 🚨 |
-                    | (모든 원료를 생략 없이 기재할 것) | ... | ... |
+                    | (예: 정제수) | ✅ 박스/팩 모두 서류와 100% 일치 | ✅ |
+                    | (환자식 예: 제이인산칼륨) / (일반식 예: 영양강화제) | 🚨 서류상 기재되어야 하나 박스/팩 시안 모두 누락됨 | 🚨 |
+                    | (모든 서류상 원료를 생략 없이 기재할 것) | ... | ... |
                     
                     ## 3️⃣ [알레르기 및 주의사항 교차 검증]
                     - 결론: (✅ 적합 또는 🚨 부적합)
@@ -449,17 +464,26 @@ def main():
                     prompt = """
                     [지시]: 단품 검토 모드입니다.
                     
-                    🚨 [표 작성 필수 명령] 🚨
-                    1. 1번 원재료부터 마지막 원재료까지 **단 1개도 생략하지 말고 모두 표의 개별 행(Row)으로 작성**하십시오.
-                    2. 복합원재료의 괄호() 안의 쉼표(,)는 절대 행 분리 기준이 아닙니다.
+                    <thinking>
+                    1. 서류 분석 (절대 기준점 도출): 업로드된 **[근거_서류(배합비/한글라벨 자료)]**를 철저히 분석하여, 패키지에 기재되어야 할 '정답 원재료명 리스트'를 작성하십시오.
+                    2. 🚨 [식품유형별 맞춤 전개 로직 적용]: 프롬프트 상단에 입력된 [제품유형] 값을 확인하십시오.
+                       - 만약 **[일반식품]**이라면: 복합원재료 5% 미만 생략(Rule 5) 및 식품첨가물 주용도 묶음 표기 허용(Rule 14) 규정을 적용하여, 합법적인 선에서 묶음/생략을 허용하여 대조하십시오.
+                       - 만약 **[특수의료용도식품 / 환자식]**이라면: 일반식품의 예외를 적용하지 마십시오. 서류에 기재된 영양강화제, 혼합제제, 복합원재료 등의 **하위 세부 성분을 단 하나도 묶지 말고 100% 낱낱이 전개(해체)**하여 리스트업 하십시오.
+                    3. 교차 대조: 도출된 '서류상 정답 리스트'를 기준으로, **[타겟_시안]**의 원재료명이 정확히 일치하는지 교차 검증하십시오.
+                    </thinking>
                     
-                    ## 2️⃣ [원재료명 1:1 정밀 대조 및 원산지 검증]
+                    🚨 [표 작성 필수 명령] 🚨
+                    1. 표의 첫 번째 열인 '서류 매칭 원료'는 시안의 글자가 아니라, **[근거_서류]를 바탕으로 식품유형 전개 로직에 맞춰 도출한 정답 원재료명**이어야 합니다.
+                    2. 도출된 정답 리스트의 모든 원료를 생략 없이 표의 개별 행(Row)으로 분리하여 작성하십시오.
+                    
+                    ## 2️⃣ [원재료명 정밀 교차 검증 (서류 vs 시안)]
                     - 결론: (✅ 적합 또는 🚨 부적합)
                     
-                    | 서류 매칭 원료 (기준) | 시안 대조 결과 및 규정 검증 | 판정 |
+                    | 서류 바탕 정답 원재료명 (식품유형별 전개 반영) | 시안 대조 결과 | 판정 |
                     |---|---|---|
-                    | (예: 정제수) | ✅ 100% 일치 | ✅ |
-                    | (모든 원료를 생략 없이 기재할 것) | ... | ... |
+                    | (예: 정제수) | ✅ 서류와 100% 일치 | ✅ |
+                    | (환자식 예: 제이인산칼륨) / (일반식 예: 영양강화제) | 🚨 서류상 기재되어야 하나 시안에서 누락됨 | 🚨 |
+                    | (모든 서류상 원료를 생략 없이 기재할 것) | ... | ... |
                     
                     ## 3️⃣ [알레르기, 주의사항 교차 검증]
                     - 결론: (✅ 적합 또는 🚨 부적합)
@@ -469,7 +493,16 @@ def main():
                 st.session_state["result_tab2"] = run_qc_model(prompt)
 
         if st.session_state["result_tab2"]:
-            st.markdown(st.session_state["result_tab2"])
+            result = st.session_state["result_tab2"]
+            thinking_match = re.search(r'<thinking>(.*?)</thinking>', result, re.DOTALL)
+            if thinking_match:
+                thinking_log = thinking_match.group(1).strip()
+                report_content = result.replace(thinking_match.group(0), "").strip()
+                with st.expander("🧠 전개 로직 연산 로그 보기"):
+                    st.markdown(f"*{thinking_log}*")
+                st.markdown(report_content)
+            else:
+                st.markdown(result)
 
     with tab3:
         if st.button("▶️ 영양성분표 오차 정밀 연산 시작", key="btn_nutri"):
@@ -526,7 +559,7 @@ def main():
             if thinking_match:
                 thinking_log = thinking_match.group(1).strip()
                 report_content = result.replace(thinking_match.group(0), "").strip()
-                with st.expander("🧠 사전 계산 로그 보기"):
+                with st.expander("🧠 오차 계산 로그 보기"):
                     st.markdown(f"*{thinking_log}*")
                 st.markdown(report_content)
             else:
@@ -536,9 +569,11 @@ def main():
         if st.button("▶️ 기타면/측면 분석 시작", key="btn_extra"):
             with st.spinner("기타면/측면 텍스트 및 마케팅 적합성 검토 중..."):
                 prompt = """
-                [지시]: 오직 아래의 기타면/측면 양식 5번 목차만 출력하십시오. 
+                [지시]: 오직 기타면/측면 양식 5번 목차만 출력하십시오. 
                 <thinking>
-                (기타면 문구 적합성 사전 분석. Rule 52 나트륨 제외 철저히 지킬 것)
+                1. 이미지 판독: 기타면/측면에 적힌 설명, 주의사항, 마케팅 문구를 모두 타이핑하십시오.
+                2. 키워드 스캔: '무첨가', '질병 예방', '건강기능식품' 관련 단어 및 알레르기 주의사항 문구의 오탈자를 검색하십시오.
+                3. 룰 매칭: Rule 15, Rule 17, Rule 36, Rule 38 등을 적용하여 모순이 없는지 검토하십시오.
                 </thinking>
                 ## 6️⃣ [기타면/측면 표시사항 및 마케팅 뱃지]
                 - 결론: (✅ 적합 또는 🚨 부적합/확인요망)
@@ -550,7 +585,16 @@ def main():
                 st.session_state["result_tab4"] = run_qc_model(prompt)
 
         if st.session_state["result_tab4"]:
-            st.markdown(st.session_state["result_tab4"])
+            result = st.session_state["result_tab4"]
+            thinking_match = re.search(r'<thinking>(.*?)</thinking>', result, re.DOTALL)
+            if thinking_match:
+                thinking_log = thinking_match.group(1).strip()
+                report_content = result.replace(thinking_match.group(0), "").strip()
+                with st.expander("🧠 문구 스캔 로그 보기"):
+                    st.markdown(f"*{thinking_log}*")
+                st.markdown(report_content)
+            else:
+                st.markdown(result)
 
     with tab5:
         if st.button("▶️ 최종 종합 리포트 생성", key="btn_summary"):
