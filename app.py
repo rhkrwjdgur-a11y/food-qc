@@ -33,7 +33,8 @@ else:
     API_KEY = os.environ.get("GOOGLE_API_KEY")
 
 genai.configure(api_key=API_KEY)
-MODEL_NAME = "gemini-2.5-flash" 
+# ✅ 버벅임 해결 및 복잡한 연산을 위해 Pro 모델로 상향 적용
+MODEL_NAME = "gemini-2.5-pro" 
 
 # ==========================================
 # 🛡️ AI 표 깨짐 강제 복구 함수
@@ -264,6 +265,9 @@ def main():
     if "result_tab3" not in st.session_state: st.session_state["result_tab3"] = None
     if "result_tab4" not in st.session_state: st.session_state["result_tab4"] = None
     if "result_summary" not in st.session_state: st.session_state["result_summary"] = None
+    
+    # ✅ 버벅임 방지를 위한 업로드 파일 캐시 초기화
+    if "uploaded_content" not in st.session_state: st.session_state["uploaded_content"] = None
 
     print_css = """
     <style>
@@ -311,43 +315,55 @@ def main():
         report_docs = st.file_uploader("📑 시험성적서", type=["pdf", "jpg", "png"], accept_multiple_files=True)
         recipe_docs = st.file_uploader("📑 배합비/한글라벨 서류", type=["pdf", "jpg", "png"], accept_multiple_files=True)
 
-    def get_uploaded_content():
-        user_content = []
-        def process(f, label):
-            user_content.append(f"### [{label}] ###")
-            if f.type.startswith("image"): 
-                user_content.append(Image.open(f))
-            else:
-                temp = f"temp_{f.name}"
-                with open(temp, "wb") as file: file.write(f.getbuffer())
-                up = genai.upload_file(temp)
-                while up.state.name == "PROCESSING": time.sleep(1)
-                user_content.append(up)
-        
-        if img_main: process(img_main, "타겟_시안_주표시면")
-        if img_info: process(img_info, "타겟_시안_정보표시면")
-        if img_nutri: process(img_nutri, "타겟_시안_영양성분표")
-        if img_extra: process(img_extra, "타겟_시안_기타면_측면")
-        
-        if box_info: process(box_info, "비교용_정답지_시안_정보표시면")
-        if box_nutri: process(box_nutri, "비교용_정답지_시안_영양성분표")
-
-        if report_docs: 
-            for f in report_docs: process(f, "근거_시험성적서")
-        if recipe_docs: 
-            for f in recipe_docs: process(f, "근거_서류(비교용 기준)")
+        def get_uploaded_content():
+            user_content = []
+            def process(f, label):
+                user_content.append(f"### [{label}] ###")
+                if f.type.startswith("image"): 
+                    user_content.append(Image.open(f))
+                else:
+                    temp = f"temp_{f.name}"
+                    with open(temp, "wb") as file: file.write(f.getbuffer())
+                    up = genai.upload_file(temp)
+                    while up.state.name == "PROCESSING": time.sleep(1)
+                    user_content.append(up)
             
-        for f in glob.glob("temp_*"): os.remove(f)
-        return user_content
+            if img_main: process(img_main, "타겟_시안_주표시면")
+            if img_info: process(img_info, "타겟_시안_정보표시면")
+            if img_nutri: process(img_nutri, "타겟_시안_영양성분표")
+            if img_extra: process(img_extra, "타겟_시안_기타면_측면")
+            
+            if box_info: process(box_info, "비교용_정답지_시안_정보표시면")
+            if box_nutri: process(box_nutri, "비교용_정답지_시안_영양성분표")
+
+            if report_docs: 
+                for f in report_docs: process(f, "근거_시험성적서")
+            if recipe_docs: 
+                for f in recipe_docs: process(f, "근거_서류(비교용 기준)")
+                
+            for f in glob.glob("temp_*"): os.remove(f)
+            return user_content
+
+        # ✅ 수정사항 1: 사이드바에서 파일을 1회만 업로드(캐싱)하도록 버튼 추가
+        st.markdown("---")
+        if st.button("🚀 업로드된 파일 시스템에 등록 (필수)"):
+            with st.spinner("파일을 AI 시스템에 연동 중입니다... (최초 1회만 실행)"):
+                st.session_state["uploaded_content"] = get_uploaded_content()
+                st.success("✅ 파일 등록 완료! 이제 우측 탭에서 검토를 시작하세요.")
 
     def run_qc_model(prompt_text):
-        content = get_uploaded_content()
-        if not content:
-            st.warning("🚨 업로드된 파일이 없습니다. 파일을 먼저 업로드해 주십시오.")
+        # ✅ 수정사항 2: 매번 업로드하지 않고 캐싱된 데이터를 불러옴 (버벅임 차단)
+        if not st.session_state["uploaded_content"]:
+            st.warning("🚨 좌측 사이드바 하단의 [🚀 업로드된 파일 시스템에 등록] 버튼을 먼저 눌러주세요.")
             return None
             
+        content = st.session_state["uploaded_content"]
+        
         model = genai.GenerativeModel(MODEL_NAME, system_instruction=SYSTEM_PROMPT)
-        generation_config = genai.types.GenerationConfig(temperature=0.0, max_output_tokens=8192)
+        
+        # ✅ 수정사항 3: 8,000자 제한 해제 (max_output_tokens를 65536으로 확장)
+        generation_config = genai.types.GenerationConfig(temperature=0.0, max_output_tokens=65536)
+        
         safety_settings = [
             {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_NONE"},
             {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_NONE"},
