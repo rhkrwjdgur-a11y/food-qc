@@ -1,10 +1,10 @@
 import streamlit as st
 import google.generativeai as genai
 from PIL import Image
-import glob
 import time
 import os
 import re
+import tempfile  # 추가됨: 안전한 임시 파일 생성을 위한 모듈
 
 # ==========================================
 # 🔒 [보안] 시스템 접속 비밀번호 설정
@@ -212,7 +212,7 @@ RULE_BOOK = """
    - 이미지 픽셀 저하로 글자 판독이 도저히 어려우면 임의 판정하지 말고 "육안 재확인 요망"으로 처리하십시오.
 
 🔥 **Rule 44. [혼합제제 하위성분 '주용도 묶음표기' 절대 금지]**
-   - 혼합제제의 괄호 안 하위 성분으로 들어가는 첨가물들은, 용도가 겹치더라도 '산도조절제', '유화제' 등의 주용도명으로 묶어서 퉁칠 수 없습니다. 반드시 '구연산', '사과산' 등 각각의 개별 첨가물 명칭을 낱낱이 전개해야 합법입니다. 시안에 혼합제제(유화제5종) 처럼 묶어 썼다면 즉시 부적합(🚨) 처리하십시오.
+   - 혼합제제의 괄호 안 하위 성분으로 들어가는 첨가물들은, 용도가 겹치더라도 '산도조절제', '유화제' 등의 주용도명으로 묶어서 퉁칠 수 জ্ঞ습니다. 반드시 '구연산', '사과산' 등 각각의 개별 첨가물 명칭을 낱낱이 전개해야 합법입니다. 시안에 혼합제제(유화제5종) 처럼 묶어 썼다면 즉시 부적합(🚨) 처리하십시오.
 
 ✅ **Rule 45. [선택적 누락 허용]**
    - 필수 법정 표시사항이 아닌 마케팅적 선택 누락은 굳이 지적하지 마십시오.
@@ -281,7 +281,7 @@ def main():
     """
     st.markdown(print_css, unsafe_allow_html=True)
 
-    st.title("🏭 식품 표시사항 정밀 검토 시스템 (V100.0 - 출력 단축 원천 봉쇄 완결판)")
+    st.title("🏭 식품 표시사항 정밀 검토 시스템 (V101.0 - 오류 방지 완결판)")
     st.markdown("<hr class='hide-on-print'>", unsafe_allow_html=True)
 
     with st.sidebar:
@@ -323,11 +323,15 @@ def main():
                 if f.type.startswith("image"): 
                     user_content.append(Image.open(f))
                 else:
-                    temp = f"temp_{f.name}"
-                    with open(temp, "wb") as file: file.write(f.getbuffer())
-                    up = genai.upload_file(temp)
+                    # 안전한 난수형 임시 파일 생성 (한글/특수문자 파일명 충돌 원천 차단)
+                    with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
+                        tmp.write(f.getbuffer())
+                        safe_temp_path = tmp.name
+                    
+                    up = genai.upload_file(safe_temp_path)
                     while up.state.name == "PROCESSING": time.sleep(1)
                     user_content.append(up)
+                    os.remove(safe_temp_path)
             
             if img_main: process(img_main, "타겟_시안_주표시면")
             if img_info: process(img_info, "타겟_시안_정보표시면")
@@ -342,7 +346,6 @@ def main():
             if recipe_docs: 
                 for f in recipe_docs: process(f, "근거_서류(비교용 기준)")
                 
-            for f in glob.glob("temp_*"): os.remove(f)
             return user_content
 
         st.markdown("---")
@@ -468,9 +471,10 @@ def main():
                         
                         ## 2️⃣ [알레르기, 주의사항 교차 검증]
                         - 결론: (✅ 적합 또는 🚨 부적합)
+                        - 서류 기준, 박스와 팩의 '~함유' 알레르기 표시 완벽 일치 여부:
                         
                         ## 🔍 [전 구간 공통: 수량 모순 및 오탈자 검증]
-                        - 🚨 포장 단위(수량) 논리 충돌 여부:
+                        - 🚨 포장 단위(수량) 논리 충돌 여부: (예: 정보표시면 하단 식품이력추적관리번호 옆은 16입이나 영양정보는 30팩으로 충돌함 등 명확히 적시)
                         - 🚨 띄어쓰기 및 오탈자 적발: 
                         """
                     else:
@@ -500,6 +504,7 @@ def main():
                         
                         ## 2️⃣ [알레르기, 주의사항 교차 검증]
                         - 결론: (✅ 적합 또는 🚨 부적합)
+                        - '~함유' 물질 원재료명 실존 여부:
                         
                         ## 🔍 [전 구간 공통: 수량 모순 및 오탈자 검증]
                         - 🚨 포장 단위(수량) 논리 충돌 여부:
