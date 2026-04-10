@@ -195,8 +195,12 @@ RULE_BOOK = """
 ✅ **Rule 34. [2% 미만 원재료 순서 유연성]**
    - 배합비 기준 투입량 2% 미만 원료는 기재 순서가 달라도 적합으로 판정하십시오.
 
-✅ **Rule 35. [서류 명칭 일치(간략명) 허용]**
-   - 의미상 동일한 간략 명칭은 적합 처리하십시오. (예: 정제소금, 천일염 -> '소금' 표기 완벽 허용)
+🔥 **Rule 35. [서류 명칭 일치 및 식품공전 표준명칭 치환 허용 룰]**
+   - 의미상 동일한 간략 명칭(예: 정제소금, 천일염 ➔ 소금)은 적합 처리하십시오.
+   - **[🚨식품공전 표준명칭 치환 절대 허용]**: 서류상의 상업용 원료명이 시안에서 **식약처 식품공전상의 공식 식품유형(표준명칭)**으로 치환된 경우, 이는 명칭 변경 위반이 아니라 완벽한 합법(✅ 적합)입니다. 
+     *(예시: '고과당', '액상과당', '고과당(에프-55)' ➔ **'기타과당'** 또는 **'액상과당'**으로 표기 시 무조건 합법)*
+     *(예시: '정백당', '백설탕' ➔ **'설탕'**으로 표기 시 무조건 합법)*
+   - 이러한 치환을 발견하면 "Rule 35에 의거하여 식품공전 표준명칭으로 올바르게 치환됨"이라는 사유와 함께 `✅ 적합` 판정을 내리십시오.
 
 ✅ **Rule 36. [주의사항 오탈자 스캔]**
    - 필수 주의사항 문구의 오탈자를 정밀 검수하십시오.
@@ -300,22 +304,17 @@ def main():
     print_css = """
     <style>
     @media print {
-        /* 상하단 헤더, 푸터, 사이드바 완전 제거 */
         header, footer, [data-testid="stSidebar"], [data-testid="stHeader"] { display: none !important; }
-        /* 입력창, 버튼, 라디오 등 UI 요소 완전 제거 */
         .stFileUploader, .stButton, .stRadio, .stTextInput { display: none !important; }
-        /* 상단 탭 네비게이션 메뉴 바 완전 제거 */
         [data-testid="stTabs"] > div:first-of-type { display: none !important; }
-        /* 기타 숨김 처리용 클래스 */
         .hide-on-print { display: none !important; }
-        /* 여백 제거하여 A4 용지에 꽉 차게 렌더링 */
         .block-container { padding-top: 0rem !important; max-width: 100% !important; }
     }
     </style>
     """
     st.markdown(print_css, unsafe_allow_html=True)
 
-    st.title("🏭 식품 표시사항 정밀 검토 시스템 (V126.0 - 보고서 원클릭 인쇄)")
+    st.title("🏭 식품 표시사항 정밀 검토 시스템 (V127.0 - 기본 서류 자동 로더 & 명칭 치환 패치)")
     st.markdown("<hr class='hide-on-print'>", unsafe_allow_html=True)
 
     with st.sidebar:
@@ -355,12 +354,26 @@ def main():
             box_nutri = None
         
         st.markdown("---")
-        st.markdown("#### 📑 증빙 서류 업로드 (★식약처 고시 파일 포함 필수)")
-        report_docs = st.file_uploader("📑 시험성적서 및 고시 파일 등", type=["pdf", "jpg", "png"], accept_multiple_files=True)
-        recipe_docs = st.file_uploader("📑 배합비/원료 서류 (엑셀 캡처본 또는 개별 라벨)", type=["pdf", "jpg", "png"], accept_multiple_files=True)
+        st.markdown("#### 📑 추가 증빙 서류 업로드 (선택사항)")
+        st.info("💡 팁: 실행 파일 옆에 `default_docs` 폴더를 만들고 PDF(식약처 고시 등)를 넣어두면 매번 업로드하지 않아도 🚀버튼 클릭 시 자동으로 읽어옵니다.")
+        report_docs = st.file_uploader("📑 추가 시험성적서 및 서류", type=["pdf", "jpg", "png"], accept_multiple_files=True)
+        recipe_docs = st.file_uploader("📑 추가 배합비/원료 서류", type=["pdf", "jpg", "png"], accept_multiple_files=True)
 
         def get_uploaded_content():
             user_content = []
+            
+            # [🔥 V127.0 핵심] 기본 폴더(default_docs) 안의 PDF 파일 자동 로드 로직
+            DEFAULT_DOCS_DIR = "./default_docs"
+            if os.path.exists(DEFAULT_DOCS_DIR):
+                auto_files = glob.glob(os.path.join(DEFAULT_DOCS_DIR, "*.pdf"))
+                for file_path in auto_files:
+                    user_content.append(f"### [자동로드_기본서류: {os.path.basename(file_path)}] ###")
+                    up = genai.upload_file(file_path)
+                    while up.state.name == "PROCESSING": 
+                        time.sleep(1)
+                    user_content.append(up)
+            
+            # 수동 업로드 파일 처리 로직
             def process(f, label):
                 user_content.append(f"### [{label}] ###")
                 if f.type.startswith("image"): 
@@ -384,21 +397,21 @@ def main():
             if box_nutri: process(box_nutri, "비교용_정답지_시안_영양성분표")
 
             if report_docs: 
-                for f in report_docs: process(f, "근거_시험성적서_및_고시원문")
+                for f in report_docs: process(f, "수동추가_근거_시험성적서_및_서류")
             if recipe_docs: 
-                for f in recipe_docs: process(f, "근거_서류(비교용 기준)")
+                for f in recipe_docs: process(f, "수동추가_근거_서류(비교용 기준)")
                 
             return user_content
 
         st.markdown("---")
-        if st.button("🚀 업로드된 파일 시스템에 등록 (필수)"):
-            with st.spinner("파일을 AI 시스템에 연동 중입니다... (최초 1회만 실행)"):
+        if st.button("🚀 전체 시스템 파일 연동 (기본 폴더 자동 로드 포함)"):
+            with st.spinner("default_docs 폴더의 기본 파일과 수동 업로드 파일을 AI 시스템에 연동 중입니다..."):
                 st.session_state["uploaded_content"] = get_uploaded_content()
                 st.success("✅ 파일 등록 완료! 이제 우측 탭에서 검토를 시작하세요.")
 
     def run_qc_model(prompt_text):
         if not st.session_state["uploaded_content"]:
-            st.warning("🚨 좌측 사이드바 하단의 [🚀 업로드된 파일 시스템에 등록] 버튼을 먼저 눌러주세요.")
+            st.warning("🚨 좌측 사이드바 하단의 [🚀 전체 시스템 파일 연동] 버튼을 먼저 눌러주세요.")
             return None
             
         content = st.session_state["uploaded_content"]
@@ -507,6 +520,7 @@ def main():
                         6. 🚨 [N종 카운트 스나이퍼]: 시안 원재료명에 숫자가 기재되어 있다면, 반드시 업로드된 서류에서 실제 개수를 카운트하십시오. 
                         7. 🚨 [Rule 14 첨가물 스나이퍼 (중요!)]: 수크랄로스 등 표 4 첨가물이 '명칭+용도명(예: 수크랄로스(감미료))'으로 적혀있는지 절대 놓치지 말고 색출하십시오.
                         8. 🚨 [Rule 44 혼합제제 내부 순서 검증]: 혼합제제 괄호가 있다면 서류의 내림차순 % 순서대로 완벽히 줄을 섰는지 강제로 검증하십시오.
+                        9. 🚨 [Rule 35 명칭 치환 스나이퍼]: 서류의 '고과당' 등이 시안에서 '기타과당'으로 바뀌어 있어도 절대 부적합 처리하지 말고 식품공전 명칭 치환으로 합법(✅) 처리하십시오.
                         </thinking>
                         
                         🚨 [표 작성 필수 명령 절대 강제 - 출력 단축 원천 봉쇄] 🚨
@@ -546,6 +560,7 @@ def main():
                         6. 🚨 [N종 카운트 스나이퍼]: 시안 원재료명에 숫자가 기재되어 있다면, 반드시 업로드된 서류에서 실제 개수를 카운트하십시오.
                         7. 🚨 [Rule 14 첨가물 스나이퍼 (중요!)]: 수크랄로스 등 표 4 첨가물이 '명칭+용도명(예: 수크랄로스(감미료))'으로 적혀있는지 절대 놓치지 말고 색출하십시오.
                         8. 🚨 [Rule 44 혼합제제 내부 순서 검증]: 혼합제제 괄호가 있다면 서류의 내림차순 % 순서대로 완벽히 줄을 섰는지 강제로 검증하십시오.
+                        9. 🚨 [Rule 35 명칭 치환 스나이퍼]: 서류의 '고과당' 등이 시안에서 '기타과당'으로 바뀌어 있어도 절대 부적합 처리하지 말고 식품공전 명칭 치환으로 합법(✅) 처리하십시오.
                         </thinking>
                         
                         🚨 [표 작성 필수 명령 절대 강제 - 출력 단축 원천 봉쇄] 🚨
@@ -585,6 +600,7 @@ def main():
                         6. 🚨 [N종 카운트 스나이퍼]: 시안 원재료명에 숫자가 기재되어 있다면, 서류 마스터 리스트에서 실제 개수를 낱낱이 카운트하여 대조하십시오.
                         7. 🚨 [Rule 14 첨가물 스나이퍼 (중요!)]: 수크랄로스 등 표 4 첨가물이 '명칭+용도명(예: 수크랄로스(감미료))'으로 적혀있는지 절대 놓치지 말고 색출하십시오.
                         8. 🚨 [Rule 44 혼합제제 내부 순서 검증]: 혼합제제 괄호가 있다면 서류의 내림차순 % 순서대로 완벽히 줄을 섰는지 강제로 검증하십시오.
+                        9. 🚨 [Rule 35 명칭 치환 스나이퍼]: 서류의 '고과당' 등이 시안에서 '기타과당'으로 바뀌어 있어도 절대 부적합 처리하지 말고 식품공전 명칭 치환으로 합법(✅) 처리하십시오.
                         </thinking>
                         
                         🚨 [표 작성 필수 명령 절대 강제 - 출력 단축 원천 봉쇄] 🚨
@@ -628,6 +644,7 @@ def main():
                         6. 🚨 [N종 카운트 스나이퍼]: 시안 원재료명에 숫자가 기재되어 있다면, 서류 마스터 리스트에서 실제 개수를 낱낱이 카운트하여 대조하십시오.
                         7. 🚨 [Rule 14 첨가물 스나이퍼 (중요!)]: 수크랄로스 등 표 4 첨가물이 '명칭+용도명(예: 수크랄로스(감미료))'으로 적혀있는지 절대 놓치지 말고 색출하십시오.
                         8. 🚨 [Rule 44 혼합제제 내부 순서 검증]: 혼합제제 괄호가 있다면 서류의 내림차순 % 순서대로 완벽히 줄을 섰는지 강제로 검증하십시오.
+                        9. 🚨 [Rule 35 명칭 치환 스나이퍼]: 서류의 '고과당' 등이 시안에서 '기타과당'으로 바뀌어 있어도 절대 부적합 처리하지 말고 식품공전 명칭 치환으로 합법(✅) 처리하십시오.
                         </thinking>
                         
                         🚨 [표 작성 필수 명령 절대 강제 - 출력 단축 원천 봉쇄] 🚨
