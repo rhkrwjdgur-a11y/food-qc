@@ -296,18 +296,26 @@ def main():
     
     if "uploaded_content" not in st.session_state: st.session_state["uploaded_content"] = None
 
+    # [🔥 V126.0 핵심] 보고서 전용 클린 인쇄를 위한 CSS 강제 적용
     print_css = """
     <style>
     @media print {
-        header, footer, .stDeployButton { display: none !important; }
-        .stFileUploader, .stButton, .stRadio, .stTextInput, .stTabs { display: none !important; }
+        /* 상하단 헤더, 푸터, 사이드바 완전 제거 */
+        header, footer, [data-testid="stSidebar"], [data-testid="stHeader"] { display: none !important; }
+        /* 입력창, 버튼, 라디오 등 UI 요소 완전 제거 */
+        .stFileUploader, .stButton, .stRadio, .stTextInput { display: none !important; }
+        /* 상단 탭 네비게이션 메뉴 바 완전 제거 */
+        [data-testid="stTabs"] > div:first-of-type { display: none !important; }
+        /* 기타 숨김 처리용 클래스 */
         .hide-on-print { display: none !important; }
+        /* 여백 제거하여 A4 용지에 꽉 차게 렌더링 */
+        .block-container { padding-top: 0rem !important; max-width: 100% !important; }
     }
     </style>
     """
     st.markdown(print_css, unsafe_allow_html=True)
 
-    st.title("🏭 식품 표시사항 정밀 검토 시스템 (V125.0 - 이상치 경고 완벽 패치)")
+    st.title("🏭 식품 표시사항 정밀 검토 시스템 (V126.0 - 보고서 원클릭 인쇄)")
     st.markdown("<hr class='hide-on-print'>", unsafe_allow_html=True)
 
     with st.sidebar:
@@ -543,7 +551,7 @@ def main():
                         🚨 [표 작성 필수 명령 절대 강제 - 출력 단축 원천 봉쇄] 🚨
                         1. 🚨 [생략 절대 금지]: 표 안에 '...', '중략', '이하 생략' 등으로 축약하는 것을 금지합니다. 모든 행(Row)을 100% 전부 타이핑하십시오.
                         2. 🚨 [오류 유형별 그룹화 절대 금지]: '[오류]' 따위의 카테고리로 묶지 말고, 원재료 순서 그대로 순차적으로 표를 작성하십시오.
-                        3. 🚨 [사유 설명 강제]: 판정 열에 단순히 '불일치'라고 적지 말고, Rulebook에 의거하여 왜 틀렸는지 법적 사유나 수정 방향을 상세히 명시하십시오. (예: Rule 44에 따라 혼합제제가 적합하더라도 해체 팁 제안 멘트 추가)
+                        3. 🚨 [사유 설명 강제]: 판정 열에 단순히 '불일치'라고 적지 말고, Rulebook에 의거하여 왜 틀렸는지 법적 사유나 수정 방향을 상세히 명시하십시오. (예: Rule 44 적용)
                         
                         ## 1️⃣ [원재료명 정밀 교차 검증 (통합 서류 vs 시안)]
                         - 결론: (✅ 적합 또는 🚨 부적합)
@@ -826,6 +834,16 @@ def main():
 
         if st.session_state["result_summary"]:
             st.markdown(st.session_state["result_summary"])
+            # 🔥 V126.0 마법의 원클릭 인쇄 버튼
+            st.markdown("""
+                <hr class='hide-on-print'>
+                <div class='hide-on-print' style='text-align: right; margin-top: 20px; margin-bottom: 20px;'>
+                    <button onclick='window.print()' style='background-color: #FF4B4B; color: white; border: none; padding: 12px 24px; border-radius: 6px; font-weight: bold; font-size: 16px; cursor: pointer; box-shadow: 0 4px 6px rgba(0,0,0,0.1); transition: background-color 0.3s;'>
+                        🖨️ 종합 보고서 전용 인쇄
+                    </button>
+                    <p style='font-size: 12px; color: gray; margin-top: 8px;'>※ 버튼 클릭 시 좌측 메뉴와 버튼들이 모두 숨겨지고 보고서 내용만 깔끔하게 인쇄됩니다.</p>
+                </div>
+            """, unsafe_allow_html=True)
 
 if __name__ == "__main__":
     if check_password(): main()
