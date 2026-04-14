@@ -63,7 +63,7 @@ SYSTEM_PROMPT = """당신은 대한민국 최고의 '식품 표시사항 법규 
 모든 검토 결과의 결론 앞에는 반드시 ✅(적합) 또는 🚨(부적합) 또는 🚨(확인 요망) 또는 ⚠️(실무 검토 권장) 이모지를 붙이십시오."""
 
 # ==========================================
-# 📚 3. 56대 룰북 원문 (최종 무결점 업데이트)
+# 📚 3. 56대 룰북 원문 
 # ==========================================
 RULE_BOOK_FULL = """
 # [식품 패키지 표시사항 QC 자동화 검수 시스템 룰북]
@@ -334,7 +334,7 @@ def main():
     </style>
     """
     st.markdown(print_css, unsafe_allow_html=True)
-    st.title("🏭 식품 표시사항 정밀 검토 시스템 (V132.1 - 3-Pass 완전 무결점 버전)")
+    st.title("🏭 식품 표시사항 정밀 검토 시스템 (V133.0 - Rule 34 예외 강제 패치)")
     st.markdown("<hr class='hide-on-print'>", unsafe_allow_html=True)
 
     with st.sidebar:
@@ -424,10 +424,7 @@ def main():
                 st.success("✅ 파일 등록 완료! 이제 우측 탭에서 검토를 시작하세요.")
 
     # ==========================================
-    # 🔥 핵심: 3-Pass 파이프라인 (제미나이 팩트 교정판)
-    # Pass 1 : 이미지 → 텍스트 추출
-    # Pass 1.5: 텍스트 자체검증 (물리적 위치 기반 환각 타격 및 수다 금지)
-    # Pass 2 : 검증된 텍스트 + PDF서류만으로 룰 판정 (쓰레기 데이터 완전 제거)
+    # 🔥 3-Pass 파이프라인
     # ==========================================
     def run_qc_3pass(tab_rules: str, judgment_prompt: str):
         if not st.session_state["uploaded_content"]:
@@ -444,12 +441,10 @@ def main():
             {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_NONE"}
         ]
 
-        # ── PASS 1: 순수 텍스트 추출 (판정 절대 금지) ──
+        # ── PASS 1: 순수 텍스트 추출 ──
         pass1_prompt = """
 [PASS 1 - 텍스트 추출 전용 명령]
-
 🚨 이 단계에서는 어떤 판정, 평가, 해석도 절대 금지입니다. 오직 텍스트 필사만 수행하십시오.
-
 각 이미지에 라벨이 붙어 있습니다 (예: [타겟_시안_주표시면], [비교용_정답지_시안_주표시면] 등).
 라벨별로 아래 형식에 따라 맨 위에서 맨 아래까지, 왼쪽에서 오른쪽까지 보이는 모든 텍스트를 100% 그대로 필사하십시오.
 
@@ -465,19 +460,14 @@ def main():
 - 표(테이블)는 | 구분자를 사용하여 구조 그대로 필사
 """
         try:
-            pass1_response = model.generate_content(
-                content + [pass1_prompt],
-                generation_config=generation_config,
-                safety_settings=safety_settings
-            )
+            pass1_response = model.generate_content(content + [pass1_prompt], generation_config=generation_config, safety_settings=safety_settings)
             extracted_text = pass1_response.text
         except Exception as e:
             return f"🚨 Pass 1 (텍스트 추출) 오류 발생: {e}"
 
-        # ── PASS 1.5: 추출 텍스트 자체검증 (환각 킬러 로직 장착) ──
+        # ── PASS 1.5: 자체 검증 ──
         pass15_prompt = f"""
 [PASS 1.5 - 추출 텍스트 자체검증 명령]
-
 🚨 당신은 방금 작성한 텍스트를 비판적으로 검열하는 '매의 눈 검수관'입니다.
 어떤 판정이나 룰 적용도 절대 금지이며, 오직 텍스트의 100% 정확성 검증만 수행하십시오.
 
@@ -485,7 +475,7 @@ def main():
 {extracted_text}
 
 검증 규칙 (이미지를 다시 보면서 위 텍스트를 1:1 대조하십시오):
-1. 🚨 [물리적 위치 기반 환각 삭제 (가장 중요)]: 원재료명(비타민, 혼합제제 등)의 특정 단어가 이미지의 **어느 줄, 어떤 단어 옆에 있는지 픽셀상으로 명확히 찾을 수 없다면 그것은 당신의 환각입니다. 즉시 삭제하십시오.** (예: 앞뒤 문맥상 있을 것 같아서 무심코 적은 성분 등)
+1. 🚨 [물리적 위치 기반 환각 삭제 (가장 중요)]: 원재료명(비타민, 혼합제제 등)의 특정 단어가 이미지의 **어느 줄, 어떤 단어 옆에 있는지 픽셀상으로 명확히 찾을 수 없다면 그것은 당신의 환각입니다. 즉시 삭제하십시오.**
 2. 🚨 [숫자/단위 검증]: 숫자(소수점 포함), 단위(g, mg, %, kcal, mL), 괄호 안 내용을 이미지와 정확히 대조하여 오독을 수정하십시오.
 3. 🚨 [누락 보완]: 이미지에 분명히 있는데 Pass 1에서 빠진 텍스트가 있다면 추가하십시오.
 
@@ -494,27 +484,21 @@ def main():
 오직 검증 및 수정이 완료된 최종 텍스트만 Pass 1과 동일한 형식(=== [라벨명] 추출 텍스트 ===)으로 화면에 출력하십시오.
 """
         try:
-            pass15_response = model.generate_content(
-                content + [pass15_prompt],
-                generation_config=generation_config,
-                safety_settings=safety_settings
-            )
+            pass15_response = model.generate_content(content + [pass15_prompt], generation_config=generation_config, safety_settings=safety_settings)
             verified_text = pass15_response.text
         except Exception as e:
             verified_text = extracted_text
 
-        # ── PASS 2: 검증된 텍스트 + PDF 서류만으로 룰 판정 ──
-        # 🔥 수정사항: 허공에 뜬 라벨(쓰레기 데이터)을 제거하고, 순수하게 PDF 서류(genai.File)와 그 라벨만 추출
+        # ── PASS 2: 판정 ──
         docs_only = []
         for i, item in enumerate(content):
             if not isinstance(item, Image.Image) and not isinstance(item, str):
                 if i > 0 and isinstance(content[i-1], str):
-                    docs_only.append(content[i-1]) # 해당 PDF의 라벨 추가
-                docs_only.append(item) # PDF 파일 객체 추가
+                    docs_only.append(content[i-1]) 
+                docs_only.append(item) 
 
         pass2_prompt = f"""
 [PASS 2 - 룰 판정 전용 명령]
-
 아래 [검증된 텍스트 데이터]는 Pass 1 추출 후 Pass 1.5 자체검증까지 완료된 최종 확정본입니다.
 이 텍스트 데이터만을 사실(FACT)로 사용하여 룰북과 대조 판정하십시오.
 🚨 이미지를 직접 다시 참조하는 것을 엄격히 금지합니다. 오직 아래 텍스트와 함께 제공된 PDF 증빙 서류만 참조하십시오.
@@ -538,11 +522,7 @@ def main():
 {judgment_prompt}
 """
         try:
-            pass2_response = model.generate_content(
-                docs_only + [pass2_prompt],
-                generation_config=generation_config,
-                safety_settings=safety_settings
-            )
+            pass2_response = model.generate_content(docs_only + [pass2_prompt], generation_config=generation_config, safety_settings=safety_settings)
             final_output = (
                 f"<pass1_log>{extracted_text}</pass1_log>\n"
                 f"<pass15_log>{verified_text}</pass15_log>\n"
@@ -553,7 +533,7 @@ def main():
             return f"🚨 Pass 2 (룰 판정) 오류 발생: {e}"
 
     # ==========================================
-    # 종합 보고서 전용 단일 호출
+    # 종합 보고서 
     # ==========================================
     def run_qc_model(prompt_text):
         if not st.session_state["uploaded_content"]:
@@ -584,20 +564,17 @@ def main():
             return f"🚨 시스템 런타임 오류 발생: {e}"
 
     # ==========================================
-    # 결과 출력 헬퍼 함수
+    # 결과 출력 헬퍼
     # ==========================================
     def display_result(result, tab_name=""):
-        if not result:
-            return
-
+        if not result: return
         pass1_match = re.search(r'<pass1_log>(.*?)</pass1_log>', result, re.DOTALL)
         pass15_match = re.search(r'<pass15_log>(.*?)</pass15_log>', result, re.DOTALL)
 
         if pass1_match:
             pass1_log = pass1_match.group(1).strip()
             result = result.replace(pass1_match.group(0), "").strip()
-            with st.expander(f"📋 Pass 1 원본 추출 로그 보기 ({tab_name})"):
-                st.markdown(f"*{pass1_log}*")
+            with st.expander(f"📋 Pass 1 원본 추출 로그 보기 ({tab_name})"): st.markdown(f"*{pass1_log}*")
 
         if pass15_match:
             pass15_log = pass15_match.group(1).strip()
@@ -610,8 +587,7 @@ def main():
         if thinking_match:
             thinking_log = thinking_match.group(1).strip()
             result = result.replace(thinking_match.group(0), "").strip()
-            with st.expander(f"🧠 Pass 2 판정 사전 분석 로그 보기 ({tab_name})"):
-                st.markdown(f"*{thinking_log}*")
+            with st.expander(f"🧠 Pass 2 판정 사전 분석 로그 보기 ({tab_name})"): st.markdown(f"*{thinking_log}*")
 
         st.markdown(result)
 
@@ -620,17 +596,13 @@ def main():
     # ==========================================
     st.markdown("### 🔍 시안 구간별 정밀 검토")
     tab1, tab2, tab3, tab4, tab5 = st.tabs([
-        "1️⃣ 주표시면",
-        "2️⃣ 정보표시면",
-        "3️⃣ 영양성분표",
-        "4️⃣ 기타면/측면",
-        "📊 5️⃣ 종합 보고서"
+        "1️⃣ 주표시면", "2️⃣ 정보표시면", "3️⃣ 영양성분표", "4️⃣ 기타면/측면", "📊 5️⃣ 종합 보고서"
     ])
 
     # ── TAB 1: 주표시면 ──
     with tab1:
         if st.button("▶️ 주표시면 분석 시작", key="btn_main"):
-            with st.spinner("【3-Pass】 Pass1 추출 → Pass1.5 자체검증 → Pass2 판정 순으로 진행 중..."):
+            with st.spinner("【3-Pass】 분석 진행 중..."):
                 judgment_prompt = """
 ## 1️⃣ [주표시면 및 마케팅 뱃지]
 - 결론: (✅ 적합 또는 🚨 부적합/확인요망) (Rulebook에 입각하여 법적 사유를 명확히 설명할 것)
@@ -656,10 +628,15 @@ def main():
     # ── TAB 2: 정보표시면 ──
     with tab2:
         if st.button("▶️ 정보표시면 원재료 기계적 1:1 맵핑 시작", key="btn_info"):
-            with st.spinner("【3-Pass】 Pass1 추출 → Pass1.5 자체검증 → Pass2 원재료 대조 판정 중..."):
+            with st.spinner("【3-Pass】 분석 진행 중..."):
+                base_tab2_warning = """
+🚨 [순서 판정 시 절대 주의사항 (Rule 34)] 🚨
+원재료 순서 오류를 지적하기 전에, 반드시 해당 원료의 배합비율(%)을 먼저 확인하십시오. 배합비율이 2% 미만인 원료들끼리는 기재 순서가 서로 뒤바뀌어 있어도 Rule 34에 의거하여 무조건 합법(✅ 적합)으로 판정해야 하며, 절대 부적합 사유로 지적하지 마십시오.
+
+"""
                 if doc_type == "통합 엑셀/PDF 자료 (마스터표 생략)":
                     if inspection_mode == "선물세트 박스(외포장) 교차 검토":
-                        judgment_prompt = """
+                        judgment_prompt = base_tab2_warning + """
 🚨 [표 작성 필수 명령 절대 강제] 🚨
 1. 표의 한 행에는 무조건 1개의 원료만 기재하십시오.
 2. 🚨 [생략 절대 금지]: '...', '중략' 등으로 축약 금지. 모든 행을 100% 타이핑하십시오.
@@ -682,7 +659,7 @@ def main():
 - 🚨 띄어쓰기 및 오탈자 적발:
 """
                     else:
-                        judgment_prompt = """
+                        judgment_prompt = base_tab2_warning + """
 🚨 [표 작성 필수 명령 절대 강제] 🚨
 1. 🚨 [생략 절대 금지]: 모든 행(Row)을 100% 전부 타이핑하십시오.
 2. 🚨 [오류 유형별 그룹화 절대 금지]: 원재료 순서 그대로 순차적으로 작성하십시오.
@@ -704,7 +681,7 @@ def main():
 """
                 else:
                     if inspection_mode == "선물세트 박스(외포장) 교차 검토":
-                        judgment_prompt = """
+                        judgment_prompt = base_tab2_warning + """
 🚨 [표 작성 필수 명령 절대 강제] 🚨
 1. 🚨 [생략 절대 금지]: 모든 행을 100% 전부 타이핑하십시오.
 2. 🚨 [오류 유형별 그룹화 절대 금지]: 에러 종류별로 표를 변형하지 마십시오.
@@ -731,7 +708,7 @@ def main():
 - 🚨 띄어쓰기 및 오탈자 적발:
 """
                     else:
-                        judgment_prompt = """
+                        judgment_prompt = base_tab2_warning + """
 🚨 [표 작성 필수 명령 절대 강제] 🚨
 1. 🚨 [생략 절대 금지]: 모든 행을 100% 전부 타이핑하십시오.
 2. 🚨 [오류 유형별 그룹화 절대 금지]: 원재료 순서 그대로 작성하십시오.
@@ -763,7 +740,7 @@ def main():
     # ── TAB 3: 영양성분표 ──
     with tab3:
         if st.button("▶️ 영양성분표 오차 정밀 연산 시작", key="btn_nutri"):
-            with st.spinner("【3-Pass】 Pass1 수치 추출 → Pass1.5 자체검증 → Pass2 오차 계산 및 % 검증 중..."):
+            with st.spinner("【3-Pass】 분석 진행 중..."):
                 if inspection_mode == "선물세트 박스(외포장) 교차 검토":
                     judgment_prompt = """
 🚨 [표 작성 필수 명령 절대 강제] 🚨
@@ -804,7 +781,7 @@ def main():
     # ── TAB 4: 기타면/측면 ──
     with tab4:
         if st.button("▶️ 기타면/측면 분석 시작", key="btn_extra"):
-            with st.spinner("【3-Pass】 Pass1 추출 → Pass1.5 자체검증 → Pass2 교차오염 차집합 연산 및 로고 검증 중..."):
+            with st.spinner("【3-Pass】 분석 진행 중..."):
                 judgment_prompt = """
 ## 6️⃣ [기타면/측면 표시사항 및 마케팅 뱃지 (HACCP 포함)]
 - 결론: (✅ 적합 또는 🚨 부적합/확인요망) (법적 사유 명시)
@@ -836,8 +813,7 @@ def main():
             else:
                 with st.spinner("모든 분석 데이터를 병합하여 최종 수정 지시서를 작성 중입니다..."):
                     def strip_logs(result):
-                        if not result:
-                            return "분석 안 함"
+                        if not result: return "분석 안 함"
                         result = re.sub(r'<pass1_log>.*?</pass1_log>', '', result, flags=re.DOTALL)
                         result = re.sub(r'<pass15_log>.*?</pass15_log>', '', result, flags=re.DOTALL)
                         result = re.sub(r'<thinking>.*?</thinking>', '', result, flags=re.DOTALL)
@@ -877,7 +853,6 @@ def main():
                     <p style='font-size: 12px; color: gray; margin-top: 8px;'>※ 버튼 클릭 시 좌측 메뉴와 버튼들이 모두 숨겨지고 보고서 내용만 깔끔하게 인쇄됩니다.</p>
                 </div>
             """, unsafe_allow_html=True)
-
 
 if __name__ == "__main__":
     if check_password():
