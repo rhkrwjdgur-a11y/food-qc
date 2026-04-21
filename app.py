@@ -63,7 +63,7 @@ SYSTEM_PROMPT = """당신은 대한민국 최고의 '식품 표시사항 법규 
 모든 검토 결과의 결론 앞에는 반드시 ✅(적합) 또는 🚨(부적합) 또는 🚨(확인 요망) 또는 ⚠️(실무 검토 권장) 이모지를 붙이십시오."""
 
 # ==========================================
-# 📚 3. 57대 룰북 원문 (V141.0 완결판)
+# 📚 3. 57대 룰북 원문 (V142.0 완결판)
 # ==========================================
 RULE_BOOK_FULL = """
 # [식품 패키지 표시사항 QC 자동화 검수 시스템 룰북]
@@ -326,37 +326,45 @@ def main():
         if key not in st.session_state:
             st.session_state[key] = None
 
+    # 🔥 V142.0 인쇄 CSS 초강력 패치: 흰 화면 증발 현상 완벽 방지
     print_css = """
     <style>
     @media print {
-        /* 1. 불필요한 UI 완벽 숨기기 */
-        header, footer, [data-testid="stSidebar"], [data-testid="stHeader"], [data-testid="stToolbar"] { display: none !important; }
-        .stFileUploader, .stButton, .stRadio, .stTextInput { display: none !important; }
-        [data-testid="stTabs"] > div:first-of-type { display: none !important; }
-        .hide-on-print { display: none !important; }
+        /* 1. 불필요한 UI 완벽하게 날려버리기 */
+        [data-testid="stSidebar"], header, footer, [data-testid="stHeader"], [data-testid="stToolbar"],
+        .stFileUploader, .stButton, .stRadio, .stTextInput, button { 
+            display: none !important; 
+        }
         
-        /* 2. 💡 스크롤 락 해제 및 전체 내용 강제 노출 (잘림 방지 핵심) */
-        html, body, .stApp, .main, [data-testid="stAppViewContainer"], [data-testid="stMainBlockContainer"], .block-container {
+        /* 2. 탭 버튼만 정확히 타겟팅해서 숨기기 (내용물 증발 방지) */
+        [role="tablist"], [data-baseweb="tab-list"] {
+            display: none !important;
+        }
+
+        /* 3. 스크롤 락 파괴: 모든 컨테이너의 높이 제한을 무한대로 풀기 */
+        html, body, .stApp, main, .block-container, 
+        [data-testid="stAppViewContainer"], [data-testid="stMainBlockContainer"], [data-testid="stVerticalBlock"] {
             height: auto !important;
+            min-height: 100% !important;
             max-height: none !important;
             overflow: visible !important;
             position: static !important;
             width: 100% !important;
             max-width: 100% !important;
-            padding-top: 0 !important;
+            padding: 0 !important;
             margin: 0 !important;
+            display: block !important;
         }
-
-        /* 3. 표 및 텍스트 페이지 넘김 최적화 */
-        table { page-break-inside: auto !important; width: 100% !important; }
+        
+        /* 4. 표(Table) 테두리 선명하게 살리기 및 페이지 잘림 방지 */
+        table { page-break-inside: auto !important; width: 100% !important; border-collapse: collapse !important; }
         tr { page-break-inside: avoid !important; page-break-after: auto !important; }
-        th, td { page-break-inside: avoid !important; }
-        h1, h2, h3, h4 { page-break-after: avoid !important; }
+        th, td { page-break-inside: avoid !important; border: 1px solid black !important; padding: 8px !important; }
     }
     </style>
     """
     st.markdown(print_css, unsafe_allow_html=True)
-    st.title("🏭 식품 표시사항 정밀 검토 시스템 (V141.0 - 2번 표 전략/후략 압축 절대 금지 패치)")
+    st.title("🏭 식품 표시사항 정밀 검토 시스템 (V142.0 - 인쇄 백지화 완벽 해결 패치)")
     st.markdown("<hr class='hide-on-print'>", unsafe_allow_html=True)
 
     with st.sidebar:
@@ -651,7 +659,6 @@ def main():
     with tab2:
         if st.button("▶️ 정보표시면 원재료 기계적 1:1 맵핑 시작", key="btn_info"):
             with st.spinner("【3-Pass】 분석 진행 중..."):
-                # 🔥 V141.0 패치: 2번 교차검증 표에서도 전략/중략/후략 절대 금지 및 1번 표와 행 개수 동기화 강제
                 base_tab2_warning = """
 🚨 [영양성분표 분석 절대 금지 명령] 🚨
 이 탭(정보표시면)의 유일한 목적은 '원재료명'과 '알레르기/주의사항' 검증입니다. 시안에 '영양정보' 박스가 보이더라도 절대 그 안의 칼로리, 수치, % 기준치를 분석하거나 표로 출력하지 마십시오. 영양성분 분석은 3번 탭의 고유 권한입니다.
@@ -683,7 +690,7 @@ def main():
 
 | 통합 서류 기준 원재료명 | 타겟(박스) 시안 표기 | 비교용(팩) 시안 표기 | 판정 (Rule 기반 상세 사유 필수 포함) |
 |---|---|---|---|
-| (1번 표와 동일한 개수의 행 유지, 전략/중략/후략 절대 금지, 100% 전체 나열) | [내용 작성] | [내용 작성] | [내용 작성] |
+| (무조건 1행 1원료 원칙, 전략/후략 절대 금지, 순서대로 100% 나열) | [내용 작성] | [내용 작성] | [내용 작성] |
 
 ## 2️⃣ [알레르기, 주의사항 교차 검증]
 - 결론: (✅ 적합 또는 🚨 부적합)
@@ -700,7 +707,7 @@ def main():
 
 | 통합 서류 기준 원재료명 | 시안 대조 결과 | 판정 (Rule 기반 상세 사유 필수 포함) |
 |---|---|---|
-| (무조건 1행 1원료 원칙, 전략/중략/후략 절대 금지, 순서대로 100% 나열) | [내용 작성] | [내용 작성] |
+| (무조건 1행 1원료 원칙, 전략/후략 절대 금지, 순서대로 100% 나열) | [내용 작성] | [내용 작성] |
 
 ## 2️⃣ [알레르기, 주의사항 교차 검증]
 - 결론: (✅ 적합 또는 🚨 부적합)
@@ -716,7 +723,7 @@ def main():
 
 | 시안 원재료명 | 매칭된 증빙 서류 | 식품유형 | 원료 제품명 | 한글표시사항 (하위 전개 성분) | 원산지 |
 |---|---|---|---|---|---|
-| (무조건 1행 1원료 원칙, 전략/중략/후략 절대 금지, 100% 나열) | [내용 작성] | [내용 작성] | [내용 작성] | [내용 작성] | [내용 작성] |
+| (무조건 1행 1원료 원칙, 전략/후략 절대 금지, 100% 나열) | [내용 작성] | [내용 작성] | [내용 작성] | [내용 작성] | [내용 작성] |
 
 ## 2️⃣ [원재료명 3방향 정밀 교차 검증 (위 마스터 표 vs 박스 시안 vs 팩 시안)]
 - 결론: (✅ 적합 또는 🚨 부적합 또는 🚨 확인 요망)
@@ -738,7 +745,7 @@ def main():
 
 | 시안 원재료명 | 매칭된 증빙 서류 | 식품유형 | 원료 제품명 | 한글표시사항 (하위 전개 성분) | 원산지 |
 |---|---|---|---|---|---|
-| (무조건 1행 1원료 원칙, 전략/중략/후략 절대 금지, 100% 나열) | [내용 작성] | [내용 작성] | [내용 작성] | [내용 작성] | [내용 작성] |
+| (무조건 1행 1원료 원칙, 전략/후략 절대 금지, 100% 나열) | [내용 작성] | [내용 작성] | [내용 작성] | [내용 작성] | [내용 작성] |
 
 ## 2️⃣ [원재료명 정밀 교차 검증 (위 마스터 표 vs 시안)]
 - 결론: (✅ 적합 또는 🚨 부적합 또는 🚨 확인 요망)
@@ -856,7 +863,7 @@ def main():
 
         if st.session_state["result_summary"]:
             st.markdown(st.session_state["result_summary"])
-            # 🔥 V140.0: 인쇄 버튼 setTimeout 우회 패치 적용
+            # 🔥 V142.0: 버튼 스크립트는 유지
             st.markdown("""
                 <hr class='hide-on-print'>
                 <div class='hide-on-print' style='text-align: right; margin-top: 20px; margin-bottom: 20px;'>
