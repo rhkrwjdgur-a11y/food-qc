@@ -63,7 +63,7 @@ SYSTEM_PROMPT = """당신은 대한민국 최고의 '식품 표시사항 법규 
 모든 검토 결과의 결론 앞에는 반드시 ✅(적합) 또는 🚨(부적합) 또는 🚨(확인 요망) 또는 ⚠️(실무 검토 권장) 이모지를 붙이십시오."""
 
 # ==========================================
-# 📚 3. 58대 룰북 원문 (V143.0 완결판 - Rule 58 추가 및 Rule 35 동의어 강화)
+# 📚 3. 58대 룰북 원문 (V144.0 완결판)
 # ==========================================
 RULE_BOOK_FULL = """
 # [식품 패키지 표시사항 QC 자동화 검수 시스템 룰북]
@@ -369,7 +369,7 @@ def main():
     </style>
     """
     st.markdown(print_css, unsafe_allow_html=True)
-    st.title("🏭 식품 표시사항 정밀 검토 시스템 (V143.0 - 동의어 및 함량 생략 로직 완벽 패치)")
+    st.title("🏭 식품 표시사항 정밀 검토 시스템 (V144.0 - 팩(내포장) 기타면 파일 업로드 및 교차검증 패치)")
     st.markdown("<hr class='hide-on-print'>", unsafe_allow_html=True)
 
     with st.sidebar:
@@ -397,6 +397,8 @@ def main():
             box_main = st.file_uploader("🔍 팩(내포장) 주표시면", type=["jpg", "png", "jpeg"])
             box_info = st.file_uploader("🔍 팩(내포장) 정보표시면", type=["jpg", "png", "jpeg"])
             box_nutri = st.file_uploader("🔍 팩(내포장) 영양성분표", type=["jpg", "png", "jpeg"])
+            # 🔥 V144.0 패치: 팩(내포장) 기타면 업로드 추가
+            box_extra = st.file_uploader("🔍 팩(내포장) 기타면/측면", type=["jpg", "png", "jpeg"])
         else:
             st.markdown("#### 🔹 시안 업로드")
             img_main = st.file_uploader("1️⃣ 시안 주표시면", type=["jpg", "png", "jpeg"])
@@ -406,6 +408,7 @@ def main():
             box_main = None
             box_info = None
             box_nutri = None
+            box_extra = None
 
         st.markdown("---")
         st.markdown("#### 📑 추가 증빙 서류 업로드 (선택사항)")
@@ -446,6 +449,9 @@ def main():
             if box_main: process(box_main, "비교용_정답지_시안_주표시면")
             if box_info: process(box_info, "비교용_정답지_시안_정보표시면")
             if box_nutri: process(box_nutri, "비교용_정답지_시안_영양성분표")
+            # 🔥 V144.0 패치: 팩(내포장) 기타면 처리 로직 추가
+            if box_extra: process(box_extra, "비교용_정답지_시안_기타면_측면")
+            
             if report_docs:
                 for f in report_docs: process(f, "수동추가_근거_시험성적서_및_서류")
             if recipe_docs:
@@ -806,8 +812,30 @@ def main():
     with tab4:
         if st.button("▶️ 기타면/측면 분석 시작", key="btn_extra"):
             with st.spinner("【3-Pass】 분석 진행 중..."):
-                judgment_prompt = """
-## 6️⃣ [기타면/측면 표시사항 및 마케팅 뱃지 (HACCP 포함)]
+                # 🔥 V144.0 패치: 기타면 팩/박스 교차 대조 프롬프트 완벽 분리
+                if inspection_mode == "선물세트 박스(외포장) 교차 검토":
+                    judgment_prompt = """
+## 5️⃣ [기타면/측면 표시사항 팩 vs 박스 교차 대조 및 마케팅 뱃지]
+- 결론: (✅ 적합 또는 🚨 부적합/확인요망) (법적 사유 명시)
+- 🚨 [Rule 38] 알레르기 교차오염 문구 적합성 (수학적 차집합 검증):
+   1) [공장 마스터]: [내용 작성]
+   2) [제품 함유 알레르기]: [내용 작성]
+   3) [정답지 (1 - 2 차집합)]: [내용 작성]
+   4) [시안 실제 교차오염 표기 (박스/팩 양쪽 확인)]: [내용 작성]
+   5) [검증 결과]: (정답지와 실제 표기가 일치하는지 판단하여 누락이나 과다 기재 지적)
+- 🚨 [Rule 56] HACCP 마크 텍스트 공식 명칭 적합성 (박스/팩 양쪽 확인):
+- 팩(내포장) 기타면 vs 박스(외포장) 기타면 교차 대조 특이사항: (주의사항, 마크 등 누락이나 모순 여부)
+- 추가 마케팅 문구 및 숫자(N종, 소수점 등) 정합성:
+- 🚨 [Rule 24] 무당/무가당 2대 의무 표기 적합성:
+- 기타 특이사항:
+
+## 🔍 [전 구간 공통: 수량 모순 및 오탈자 검증]
+- 🚨 포장 단위(수량) 2-Track 검증:
+- 🚨 띄어쓰기 및 오탈자 적발:
+"""
+                else:
+                    judgment_prompt = """
+## 5️⃣ [기타면/측면 표시사항 및 마케팅 뱃지 (HACCP 포함)]
 - 결론: (✅ 적합 또는 🚨 부적합/확인요망) (법적 사유 명시)
 - 🚨 [Rule 38] 알레르기 교차오염 문구 적합성 (수학적 차집합 검증):
    1) [공장 마스터]: [내용 작성]
