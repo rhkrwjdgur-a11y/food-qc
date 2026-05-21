@@ -6,6 +6,10 @@ import time
 import os
 import re
 import tempfile
+import socket
+
+# 👇 [V166.0 패치] 파이썬 전체 네트워크 대기 시간을 10분(600초)으로 강제 연장하여 업로드 끊김 방어
+socket.setdefaulttimeout(600)
 
 # ==========================================
 # 🔒 [보안] 시스템 접속 비밀번호 설정
@@ -63,7 +67,7 @@ SYSTEM_PROMPT = """당신은 대한민국 최고의 '식품 표시사항 법규 
 모든 검토 결과의 결론 앞에는 반드시 ✅(적합) 또는 🚨(부적합) 또는 🚨(확인 요망) 또는 🌟(표5/6 치환 알림) 이모지를 붙이십시오."""
 
 # ==========================================
-# 📚 3. 68대 룰북 원문 (V165.0 범용 완결판)
+# 📚 3. 68대 룰북 원문 (V166.0 범용 완결판)
 # ==========================================
 RULE_BOOK_FULL = """
 # [식품 패키지 표시사항 QC 자동화 검수 시스템 룰북]
@@ -393,7 +397,7 @@ def main():
     </style>
     """
     st.markdown(print_css, unsafe_allow_html=True)
-    st.title("🏭 식품 표시사항 정밀 검토 시스템 (V165.0 - 철벽 타임아웃 방어)")
+    st.title("🏭 식품 표시사항 정밀 검토 시스템 (V166.0 - 전체 네트워크 철벽 방어)")
     st.markdown("<hr class='hide-on-print'>", unsafe_allow_html=True)
 
     with st.sidebar:
@@ -454,8 +458,7 @@ def main():
                         up = genai.upload_file(file_path)
                         while up.state.name == "PROCESSING":
                             time.sleep(2)
-                            # 상태를 다시 조회해오지 않으면 영원히 무한루프에 빠지므로 반드시 갱신!
-                            up = genai.get_file(up.name) 
+                            up = genai.get_file(up.name) # 상태 갱신 필수
                         return up
                     except Exception as e:
                         if attempt == 2: # 3번 다 실패하면 에러 발생
@@ -496,7 +499,7 @@ def main():
 
         st.markdown("---")
         if st.button("🚀 전체 시스템 파일 연동 (기본 폴더 자동 로드 포함)"):
-            with st.spinner("파일을 AI 시스템에 연동 중입니다..."):
+            with st.spinner("파일을 AI 시스템에 연동 중입니다... (네트워크 상황에 따라 1~2분 소요될 수 있습니다)"):
                 st.session_state["uploaded_content"] = get_uploaded_content()
                 st.success("✅ 파일 등록 완료! 이제 우측 탭에서 검토를 시작하세요.")
 
@@ -532,7 +535,6 @@ def main():
 (추출 내용)
 """
         try:
-            # ✅ [V165.0 타임아웃 방어 패치] request_options={"timeout": 600}
             pass1_response = model.generate_content(content + [pass1_prompt], generation_config=generation_config, safety_settings=safety_settings, request_options={"timeout": 600})
             extracted_text = pass1_response.text
         except Exception as e:
@@ -553,7 +555,6 @@ def main():
 오직 검증 및 수정이 완료된 최종 텍스트만 위와 동일한 구조(=== 미션 A ===, === 미션 B ===)로 화면에 출력하십시오.
 """
         try:
-            # ✅ 타임아웃 방어
             pass15_response = model.generate_content(content + [pass15_prompt], generation_config=generation_config, safety_settings=safety_settings, request_options={"timeout": 600})
             verified_text = pass15_response.text
         except Exception as e:
@@ -592,7 +593,6 @@ def main():
 {judgment_prompt}
 """
         try:
-            # ✅ 타임아웃 방어
             pass2_response = model.generate_content(docs_only + [pass2_prompt], generation_config=generation_config, safety_settings=safety_settings, request_options={"timeout": 600})
             final_output = (
                 f"<pass1_log>{extracted_text}</pass1_log>\n"
@@ -629,7 +629,6 @@ def main():
         {prompt_text}
         """
         try:
-            # ✅ 타임아웃 방어
             response = model.generate_content(content + [full_prompt], generation_config=generation_config, safety_settings=safety_settings, request_options={"timeout": 600})
             return fix_markdown_table(response.text)
         except Exception as e:
