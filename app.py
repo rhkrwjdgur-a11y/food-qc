@@ -63,7 +63,7 @@ SYSTEM_PROMPT = """당신은 대한민국 최고의 '식품 표시사항 법규 
 모든 검토 결과의 결론 앞에는 반드시 ✅(적합) 또는 🚨(부적합) 또는 🚨(확인 요망) 또는 🌟(표5/6 치환 알림) 이모지를 붙이십시오."""
 
 # ==========================================
-# 📚 3. 68대 룰북 원문 (V164.0 범용 완결판)
+# 📚 3. 68대 룰북 원문 (V165.0 범용 완결판)
 # ==========================================
 RULE_BOOK_FULL = """
 # [식품 패키지 표시사항 QC 자동화 검수 시스템 룰북]
@@ -393,7 +393,7 @@ def main():
     </style>
     """
     st.markdown(print_css, unsafe_allow_html=True)
-    st.title("🏭 식품 표시사항 정밀 검토 시스템 (V164.0 - 68대 절대 룰 탑재 및 타임아웃 방어)")
+    st.title("🏭 식품 표시사항 정밀 검토 시스템 (V165.0 - 철벽 타임아웃 방어)")
     st.markdown("<hr class='hide-on-print'>", unsafe_allow_html=True)
 
     with st.sidebar:
@@ -446,14 +446,27 @@ def main():
         def get_uploaded_content():
             user_content = []
             DEFAULT_DOCS_DIR = "./default_docs"
+
+            # ⭐ [V165.0 패치] 업로드 타임아웃 방어 및 무한루프(PROCESSING) 탈출 헬퍼 함수
+            def robust_upload(file_path):
+                for attempt in range(3): # 최대 3번까지 업로드 재시도
+                    try:
+                        up = genai.upload_file(file_path)
+                        while up.state.name == "PROCESSING":
+                            time.sleep(2)
+                            # 상태를 다시 조회해오지 않으면 영원히 무한루프에 빠지므로 반드시 갱신!
+                            up = genai.get_file(up.name) 
+                        return up
+                    except Exception as e:
+                        if attempt == 2: # 3번 다 실패하면 에러 발생
+                            raise e
+                        time.sleep(2) # 실패 시 2초 쉬고 다시 시도
+
             if os.path.exists(DEFAULT_DOCS_DIR):
                 auto_files = glob.glob(os.path.join(DEFAULT_DOCS_DIR, "*.pdf"))
                 for file_path in auto_files:
                     user_content.append(f"### [자동로드_기본서류: {os.path.basename(file_path)}] ###")
-                    up = genai.upload_file(file_path)
-                    while up.state.name == "PROCESSING":
-                        time.sleep(1)
-                    user_content.append(up)
+                    user_content.append(robust_upload(file_path))
 
             def process(f, label):
                 user_content.append(f"### [{label}] ###")
@@ -463,10 +476,7 @@ def main():
                     with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
                         tmp.write(f.getbuffer())
                         safe_temp_path = tmp.name
-                    up = genai.upload_file(safe_temp_path)
-                    while up.state.name == "PROCESSING":
-                        time.sleep(1)
-                    user_content.append(up)
+                    user_content.append(robust_upload(safe_temp_path))
                     os.remove(safe_temp_path)
 
             if img_main: process(img_main, "타겟_시안_주표시면")
@@ -522,7 +532,7 @@ def main():
 (추출 내용)
 """
         try:
-            # ✅ [V164.0 타임아웃 방어 패치] request_options={"timeout": 600}
+            # ✅ [V165.0 타임아웃 방어 패치] request_options={"timeout": 600}
             pass1_response = model.generate_content(content + [pass1_prompt], generation_config=generation_config, safety_settings=safety_settings, request_options={"timeout": 600})
             extracted_text = pass1_response.text
         except Exception as e:
