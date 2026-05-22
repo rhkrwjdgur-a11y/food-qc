@@ -976,4 +976,98 @@ def main():
 - ⭐ [Rule 64] 원물 기만표시(99.9% 등) 스나이퍼 스캔:
 - ⭐ [Rule 52] 영양강조 컷오프(7.5%/15%) 및 N종 카운트 정밀 타겟팅:
 - ⭐ [Rule 24] 무당/무가당/설탕무첨가 2대 의무 표기 적합성 검증:
-   1) 감미료 문구 위치: (알룰로스 등 식품원료는
+   1) 감미료 문구 위치: (알룰로스 등 식품원료는 제외하고 판단할 것. 적합/부적합 사유 명시)
+   2) 열량 병기 물리적 위치: (저열량 기준 충족 여부를 확인하고, 미충족 시 열량 텍스트가 뱃지 주변에 있는지 판정 사유 명시)
+- 기타 특이사항:
+
+## 🔍 [전 구간 공통: 수량 모순 및 오탈자 검증]
+- ⭐ 포장 단위(수량) 2-Track 검증:
+- ⭐ [Rule 69] 비타민 아래첨자 스나이퍼:
+- ⭐ 띄어쓰기 및 오탈자 적발: (글자 단위 1:1 대조)
+"""
+                else:
+                    judgment_prompt = """
+## 5️⃣ [기타면/측면 표시사항 및 마케팅 뱃지 (HACCP 포함)]
+- 결론: (✅ 적합 또는 🚨 부적합/확인요망) (법적 사유 명시)
+- ⭐ [Rule 59] 필수 의무표시 3종 누락 검증:
+   1) 고객상담실 번호: (확인 여부 기재)
+   2) 반품 및 교환처: (확인 여부 기재)
+   3) 1399 부정/불량식품 신고 문구: (확인 여부 기재)
+   4) 판정: (하나라도 누락 시 🚨부적합 처리)
+- ⭐ [Rule 38] 알레르기 교차오염 문구 적합성 (수학적 차집합 검증):
+   1) [공장 마스터]: [내용 작성]
+   2) [제품 함유 알레르기]: [내용 작성]
+   3) [정답지 (1 - 2 차집합)]: [내용 작성]
+   4) [시안 실제 교차오염 표기]: [내용 작성]
+   5) [검증 결과]: (정답지와 실제 표기가 일치하는지 판단하여 누락이나 과다 기재 지적)
+- ⭐ [Rule 56] HACCP 마크 텍스트 공식 명칭 적합성:
+- ⭐ [Rule 63] 미드팩 190mL 기타면 내 '질소충전' 표기 누락 점검:
+- ⭐ [Rule 64] 원물 기만표시(99.9% 등) 스나이퍼 스캔:
+- ⭐ [Rule 52] 영양강조 컷오프(7.5%/15%) 및 N종 카운트 정밀 타겟팅:
+- ⭐ [Rule 24] 무당/무가당/설탕무첨가 2대 의무 표기 적합성 검증:
+   1) 감미료 문구 위치: (알룰로스 등 식품원료는 제외하고 판단할 것. 적합/부적합 사유 명시)
+   2) 열량 병기 물리적 위치: (저열량 기준 충족 여부를 확인하고, 미충족 시 열량 텍스트가 뱃지 주변에 있는지 판정 사유 명시)
+- 제품명/원료 함량 강조 적합성:
+- 기타 특이사항:
+
+## 🔍 [전 구간 공통: 수량 모순 및 오탈자 검증]
+- ⭐ 포장 단위(수량) 2-Track 검증:
+- ⭐ [Rule 69] 비타민 아래첨자 스나이퍼:
+- ⭐ 띄어쓰기 및 오탈자 적발: (글자 단위 1:1 대조)
+"""
+                st.session_state["result_tab4"] = run_qc_3pass(RULES_TAB4, judgment_prompt, extract_mission)
+        display_result(st.session_state["result_tab4"], "기타면/측면")
+
+    # ── TAB 5: 종합 보고서 ──
+    with tab5:
+        if st.button("▶️ 최종 종합 리포트 생성", key="btn_summary"):
+            if not any([st.session_state["result_tab1"], st.session_state["result_tab2"],
+                        st.session_state["result_tab3"], st.session_state["result_tab4"]]):
+                st.warning("🚨 앞의 1~4번 탭 중에서 최소 1개 이상을 먼저 분석해 주십시오!")
+            else:
+                with st.spinner("모든 분석 데이터를 병합하여 최종 수정 지시서를 작성 중입니다..."):
+                    def strip_logs(result):
+                        if not result: return "분석 안 함"
+                        result = re.sub(r'<pass1_log>.*?</pass1_log>', '', result, flags=re.DOTALL)
+                        result = re.sub(r'<pass15_log>.*?</pass15_log>', '', result, flags=re.DOTALL)
+                        result = re.sub(r'<thinking>.*?</thinking>', '', result, flags=re.DOTALL)
+                        return result.strip()
+
+                    combined_results = f"""
+[1번 탭 결과]: {strip_logs(st.session_state.get('result_tab1'))}
+[2번 탭 결과]: {strip_logs(st.session_state.get('result_tab2'))}
+[3번 탭 결과]: {strip_logs(st.session_state.get('result_tab3'))}
+[4번 탭 결과]: {strip_logs(st.session_state.get('result_tab4'))}
+"""
+                    summary_prompt = f"""
+[지시]: 지금까지 사용자가 각 탭에서 검토한 내용들을 모았습니다. 실무자가 한눈에 보고 패키지를 수정할 수 있도록 종합 결론을 내려주십시오.
+
+[기존 분석 데이터]
+{combined_results}
+
+## 📋 [최종 종합 검토 리포트]
+- **최종 판정:** (✅ 수정 없이 진행 가능 또는 🚨 즉시 수정 필요)
+
+### 📌 [핵심 지적 사항 및 수정 지시]
+(위 분석 데이터에서 '부적합(🚨)' 또는 '확인요망'이 나온 내용들만 뽑아서 번호 순 불릿 포인트로 요약하십시오. 법적 사유가 적혀있다면 그 사유도 반드시 요약하여 포함하십시오.)
+
+### 🔍 [기타 주의사항]
+(실무자가 참고해야 할 관련 룰북 코멘트를 덧붙이십시오.)
+"""
+                    st.session_state["result_summary"] = run_qc_model(summary_prompt)
+
+        if st.session_state["result_summary"]:
+            st.markdown(st.session_state["result_summary"])
+            st.markdown("""
+                <hr class='hide-on-print'>
+                <div class='hide-on-print' style='text-align: right; margin-top: 20px; margin-bottom: 20px;'>
+                    <button onclick='setTimeout(function(){ window.print(); }, 100);' style='background-color: #FF4B4B; color: white; border: none; padding: 12px 24px; border-radius: 6px; font-weight: bold; font-size: 16px; cursor: pointer; box-shadow: 0 4px 6px rgba(0,0,0,0.1);'>
+                        🖨️ 종합 보고서 전용 인쇄
+                    </button>
+                    <p style='font-size: 12px; color: gray; margin-top: 8px;'>※ 단축키(Ctrl+P 또는 Cmd+P)를 누르셔도 스크롤 잘림 없이 전체 페이지가 인쇄됩니다.</p>
+                </div>
+            """, unsafe_allow_html=True)
+
+if __name__ == "__main__":
+    if check_password():
+        main()
