@@ -485,12 +485,14 @@ def main():
             box_nutri = None
             box_extra = None
 
-        st.markdown("---")
+      st.markdown("---")
         st.markdown("#### 📑 추가 증빙 서류 업로드 (선택사항)")
-        st.info("💡 팁: 실행 파일 옆에 `default_docs` 정규 폴더를 만들고 PDF를 넣어두면 🚀버튼 클릭 시 자동으로 읽어옵니다. 가급적 표가 깨지지 않게 엑셀 원본이나 고화질 캡처 이미지를 올려주세요.")
-        report_docs = st.file_uploader("📑 추가 시험성적서 및 서류", type=["pdf", "jpg", "png"], accept_multiple_files=True)
-        # 🔥 배합비(레시피) 서류 업로더 UI 수정 적용
-        recipe_docs = st.file_uploader("📑 추가 배합비(레시피) 서류 (🔥2% 순서 검증용)", type=["pdf", "jpg", "png"], accept_multiple_files=True)
+        st.info("💡 팁: 실행 파일 옆에 `default_docs` 정규 폴더를 만들고 PDF를 넣어두면 🚀버튼 클릭 시 자동으로 읽어옵니다.")
+        
+        # 3단 분리를 위해 업로더를 명확히 3개로 쪼갰습니다!
+        report_docs = st.file_uploader("1️⃣ 시험성적서 (영양성분 검증용)", type=["pdf", "jpg", "png"], accept_multiple_files=True)
+        label_docs = st.file_uploader("2️⃣ 원료 한글라벨/스펙 (원재료 1:1 대조용)", type=["pdf", "jpg", "png"], accept_multiple_files=True)
+        recipe_docs = st.file_uploader("3️⃣ 배합비/레시피 (🔥2% 순서 검증용)", type=["pdf", "jpg", "png"], accept_multiple_files=True)
 
         def get_uploaded_content():
             user_content = []
@@ -529,6 +531,7 @@ def main():
                     user_content.append(robust_upload(safe_temp_path))
                     os.remove(safe_temp_path)
 
+            # 시안 이미지 처리
             if img_main: process(img_main, "타겟_시안_주표시면")
             if img_info: process(img_info, "타겟_시안_정보표시면")
             if img_nutri: process(img_nutri, "타겟_시안_영양성분표")
@@ -538,11 +541,14 @@ def main():
             if box_nutri: process(box_nutri, "비교용_정답지_시안_영양성분표")
             if box_extra: process(box_extra, "비교용_정답지_시안_기타면_측면")
             
+            # 서류 이미지 명확한 라벨링으로 처리 (AI 환각 방지)
             if report_docs:
-                for f in report_docs: process(f, "수동추가_근거_시험성적서_및_서류")
+                for f in report_docs: process(f, "수동추가_근거_시험성적서")
+            if label_docs:
+                for f in label_docs: process(f, "수동추가_원료_한글라벨_및_스펙")
             if recipe_docs:
-                # 🔥 배합비(레시피) 이미지의 라벨을 명확하게 지정하여 LLM의 [미션 C] 추출을 돕습니다.
                 for f in recipe_docs: process(f, "수동추가_배합비_레시피_데이터")
+                
             return user_content
 
         st.markdown("---")
