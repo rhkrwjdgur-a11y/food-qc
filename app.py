@@ -13,16 +13,17 @@ import re
 import tempfile
 import socket
 import io
+import json
 
 # 👇 [네트워크 방어] 파이썬 전체 대기 시간을 10분(600초)으로 연장
 socket.setdefaulttimeout(600)
 
 # ==========================================
-# 🔠 [Google Cloud Vision API 설정] (순수 OCR)
+# 🔠 [Google Cloud Vision API 설정] (스트림릿 클라우드 호환 버전)
 # ==========================================
-# GCP 서비스 계정 키(JSON)가 st.secrets나 환경변수에 세팅되어야 정상 작동합니다.
 try:
     from google.cloud import vision
+    from google.oauth2 import service_account
     VISION_AVAILABLE = True
 except ImportError:
     VISION_AVAILABLE = False
@@ -33,11 +34,21 @@ def extract_text_with_vision(file_path):
         return "🚨 [시스템 알림]: google-cloud-vision 라이브러리가 설치되지 않았습니다."
     
     try:
-        client = vision.ImageAnnotatorClient()
+        # 🌟 스트림릿 비밀 금고(Secrets)에서 열쇠 꺼내기
+        if "GOOGLE_VISION_KEY" in st.secrets:
+            key_dict = json.loads(st.secrets["GOOGLE_VISION_KEY"])
+            credentials = service_account.Credentials.from_service_account_info(key_dict)
+            client = vision.ImageAnnotatorClient(credentials=credentials)
+        else:
+            # 로컬 컴퓨터에서 .bat 파일로 실행할 때 (환경 변수 의존)
+            client = vision.ImageAnnotatorClient()
+            
         with io.open(file_path, 'rb') as image_file:
             content = image_file.read()
+            
         image = vision.Image(content=content)
         response = client.document_text_detection(image=image)
+        
         if response.error.message:
             return f"🚨 [Vision API 에러]: {response.error.message}"
         return response.full_text_annotation.text
@@ -123,7 +134,7 @@ RULE_BOOK_FULL = """
    - **[🚨 AI 임의 분류 금지]**: '나한과추출분말', '진득찰추출분말' 등 추출물이나 분말 류를 이름만 보고 임의로 '식품첨가물'로 오판하지 마십시오! 서류상 명백히 '식품첨가물'로 분류되지 일반 원료는 무조건 원산지 표시 대상 순위에 포함시켜야 합니다.
 
 ✅ **Rule 2. 향료 및 첨가물 명칭 유연화 (통합 표기 합법성)**
-   - 배합비 서류에 구체적인 개별 향료명이 명시되어 있더라도, 시안 원재료명에 단순히 '향료'라고 묶어서 표기한 것은 식약처 고시상 완벽 적합입니다.
+   - 배합비 서류에 구체적인 개별 향료명이 명시되어 있더라도, 시안 원재료명에 단순히 '향료'라고 묶어서 표기한 단어는 식약처 고시상 완벽 적합입니다.
 
 🔥 **Rule 3. [주표시면 vs 영양성분표 수치 100% 일치 및 총열량/식이섬유 열량 계산 강제 룰]**
    - 주표시면(앞면)에 열량(kcal)이나 특정 영양소 함량(예: 칼슘 200mg)이 강조되어 있다면, 반드시 뒷면 영양성분표의 수치와 단 1의 오차도 없이 100% 일치하는지 교차 대조하십시오.
@@ -449,7 +460,7 @@ def main():
     </style>
     """
     st.markdown(print_css, unsafe_allow_html=True)
-    st.title("🏭 식품 표시사항 정밀 검토 시스템 (V300.0 - 미션 쪼개기 & 하이브리드 OCR)")
+    st.title("🏭 식품 표시사항 정밀 검토 시스템 (V300.0 - 하이브리드 미션 쪼개기)")
     st.markdown("<hr class='hide-on-print'>", unsafe_allow_html=True)
 
     with st.sidebar:
@@ -494,7 +505,7 @@ def main():
 
         def get_uploaded_content():
             user_content = []
-            local_paths = [] # Vision API용 로컬 파일 추적
+            local_paths = []
             DEFAULT_DOCS_DIR = "./default_docs"
 
             def robust_upload(file_path, label):
@@ -611,7 +622,7 @@ def main():
 1. ⭐ [오타/환각 원천 차단]: '염화콜린'을 '염화칼륨'으로 잘못 읽는 등 자동완성을 엄격히 금지합니다.
 2. ⭐ [없는 데이터 창조 금지]: 서류에 없는 원료를 창조하지 마십시오.
 3. ⭐ [누락 및 요약 절대 금지]: "등", "..."을 써서 퉁치는 행위를 금지합니다. 100% 모조리 복원하십시오.
-4. ⭐ [XML/JSON 괄호 보존]: 만약 태그나 표로 추출되었다면 그 형태를 훼손하지 마십시오.
+4. ⭐ [XML 괄호 보존]: 만약 태그나 표로 추출되었다면 그 형태를 훼손하지 마십시오.
 """
             try:
                 pass15_response = model.generate_content(content + [pass15_prompt], generation_config=generation_config, safety_settings=safety_settings, request_options={"timeout": 600})
@@ -747,7 +758,6 @@ def main():
 🔥 [시스템 절대 족쇄: 순서 검증 시 환각 및 얼렁뚱땅 금지 (2% 기준선 강제 분리)] 🔥
 🔥 [마크다운 표 강제 규정 (No Truncation - 중략 시 시스템 붕괴)] 🔥
 """
-                # 판정 프롬프트는 검토 모드에 따라 분기 (이전 코드와 동일한 로직 유지)
                 if doc_type == "통합 엑셀/PDF 자료 (마스터표 생략)":
                     judgment_prompt = base_tab2_warning + "## 1️⃣ [Rule 70. 내포장 vs 외포장 1:1 대조]\n- 검증 결과:\n## 2️⃣ [마스터 서류 vs 시안 교차 검증]\n(여기에 1:1 대조 표 작성, 생략 금지)\n### 🚨 [누락 스나이퍼]\n## 3️⃣ [배합비 2% 순서 검증]\n## 4️⃣ [알레르기, 주의사항 교차 검증]\n## 5️⃣ [행정 정보 교차 검증]\n## 6️⃣ [오탈자 전수 검증]"
                 else:
