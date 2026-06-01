@@ -12,9 +12,37 @@ import os
 import re
 import tempfile
 import socket
+import io
 
 # 👇 [네트워크 방어] 파이썬 전체 대기 시간을 10분(600초)으로 연장
 socket.setdefaulttimeout(600)
+
+# ==========================================
+# 🔠 [Google Cloud Vision API 설정] (순수 OCR)
+# ==========================================
+# GCP 서비스 계정 키(JSON)가 st.secrets나 환경변수에 세팅되어야 정상 작동합니다.
+try:
+    from google.cloud import vision
+    VISION_AVAILABLE = True
+except ImportError:
+    VISION_AVAILABLE = False
+
+def extract_text_with_vision(file_path):
+    """Google Cloud Vision API를 사용하여 이미지에서 순수 텍스트를 추출하는 함수"""
+    if not VISION_AVAILABLE:
+        return "🚨 [시스템 알림]: google-cloud-vision 라이브러리가 설치되지 않았습니다."
+    
+    try:
+        client = vision.ImageAnnotatorClient()
+        with io.open(file_path, 'rb') as image_file:
+            content = image_file.read()
+        image = vision.Image(content=content)
+        response = client.document_text_detection(image=image)
+        if response.error.message:
+            return f"🚨 [Vision API 에러]: {response.error.message}"
+        return response.full_text_annotation.text
+    except Exception as e:
+        return f"🚨 [Vision API 실행 오류]: {e}"
 
 # ==========================================
 # 🔒 [보안] 시스템 접속 비밀번호 설정
@@ -304,7 +332,7 @@ RULE_BOOK_FULL = """
    - 제품명에 강조된 원물이 '페이스트, 농축액' 등 복합원재료 형태면 반드시 괄호로 진짜 원물 배합함량(%)을 기재해야 합법. 단, 농축액 괄호 안에 **'고형분(%)'이 이미 명시되어 있다면 배합함량 기재 의무를 완벽히 다한 것이므로, 추가로 (원물명 100%) 표기를 요구하는 과잉 지적(오버킬)을 엄격히 금지**합니다. (예: `검은콩농축액(고형분60%)` 표기는 완벽한 합법(✅)임)
 
 🔥 **Rule 61. [가공국 vs 원물국 분리 및 국산 예외 실무 룰 (QA 고도화)]**
-   - 명칭이 '페이스트, 농축액, 분말' 등으로 끝나는 복합원재료의 경우, 원물이 국산이고 국내에서 가공했다면 괄호 안에 원물명을 쓰지 않고 곧바로 (국산)이라고 써도 완벽한 합법(✅)입니다.
+   - 명칭이 '페이스트, 농축액, 분말' 등으로 끝나는 복합원재료의 경우, 원물이 국산이고 국내에서 가공했다면 괄호 안에 원물명을 쓰지 단고 곧바로 (국산)이라고 써도 완벽한 합법(✅)입니다.
 
 🔥 **Rule 62. [축산물 주표시면 냉동/냉장 의무 표시 및 자체 추론 룰]**
    - 축산물 가공품이 냉장/냉동 제품인 경우 주표시면(앞면)에 상태를 명시해야 함.
@@ -398,40 +426,22 @@ RULES_TAB4 = "[탭4 기타면/측면 관련 핵심 룰]\n" + get_sliced_rules([7
 # 🚀 메인 앱 로직
 # ==========================================
 def main():
-    for key in ["result_tab1", "result_tab2", "result_tab3", "result_tab4", "result_summary", "uploaded_content"]:
+    for key in ["result_tab1", "result_tab2", "result_tab3", "result_tab4", "result_summary", "uploaded_content", "local_file_paths"]:
         if key not in st.session_state:
-            st.session_state[key] = None
+            st.session_state[key] = None if key != "local_file_paths" else []
 
     print_css = """
     <style>
     @media print {
-        /* 1. 불필요한 UI 완벽하게 날려버리기 */
         [data-testid="stSidebar"], header, footer, [data-testid="stHeader"], [data-testid="stToolbar"],
-        .stFileUploader, .stButton, .stRadio, .stTextInput, button { 
-            display: none !important; 
-        }
-        
-        /* 2. 탭 버튼만 정확히 타겟팅해서 숨기기 (내용물 증발 방지) */
-        [role="tablist"], [data-baseweb="tab-list"] {
-            display: none !important;
-        }
-
-        /* 3. 스크롤 락 파괴: 모든 컨테이너의 높이 제한을 무한대로 풀기 */
+        .stFileUploader, .stButton, .stRadio, .stTextInput, button { display: none !important; }
+        [role="tablist"], [data-baseweb="tab-list"] { display: none !important; }
         html, body, .stApp, main, .block-container, 
         [data-testid="stAppViewContainer"], [data-testid="stMainBlockContainer"], [data-testid="stVerticalBlock"] {
-            height: auto !important;
-            min-height: 100% !important;
-            max-height: none !important;
-            overflow: visible !important;
-            position: static !important;
-            width: 100% !important;
-            max-width: 100% !important;
-            padding: 0 !important;
-            margin: 0 !important;
-            display: block !important;
+            height: auto !important; min-height: 100% !important; max-height: none !important;
+            overflow: visible !important; position: static !important; width: 100% !important; max-width: 100% !important;
+            padding: 0 !important; margin: 0 !important; display: block !important;
         }
-        
-        /* 4. 표(Table) 테두리 선명하게 살리기 및 페이지 잘림 방지 */
         table { page-break-inside: auto !important; width: 100% !important; border-collapse: collapse !important; }
         tr { page-break-inside: avoid !important; page-break-after: auto !important; }
         th, td { page-break-inside: avoid !important; border: 1px solid black !important; padding: 8px !important; }
@@ -439,71 +449,60 @@ def main():
     </style>
     """
     st.markdown(print_css, unsafe_allow_html=True)
-    st.title("🏭 식품 표시사항 정밀 검토 시스템 (V217.0 - 의미론적 맵핑 차단 및 범용 동의어 허용판)")
+    st.title("🏭 식품 표시사항 정밀 검토 시스템 (V300.0 - 미션 쪼개기 & 하이브리드 OCR)")
     st.markdown("<hr class='hide-on-print'>", unsafe_allow_html=True)
 
     with st.sidebar:
         st.header("📄 검토 설정 및 파일 업로드")
         
+        st.markdown("#### ⚙️ [옵션] 초정밀 OCR 모드 전환")
+        use_vision_api = st.checkbox("🔠 Google Cloud Vision API 병행 사용 (강력한 환각 억제)", value=False, help="이 기능은 GCP 서비스 계정 키가 설정되어 있어야 작동합니다.")
+        
         st.markdown("#### 🛠️ [옵션] 텍스트 수동 복붙 (OCR 환각 차단용)")
-        st.info("💡 텍스트가 너무 빽빽해서 AI가 글자를 빼먹는다면, 여기에 디자이너 원본 텍스트를 복붙해 주세요. 100% 완벽 대조가 가능합니다.")
         st.session_state["manual_target"] = st.text_area("📦 타겟(박스) 원재료명 직접 입력", height=100)
         st.session_state["manual_compare"] = st.text_area("🧃 비교용(팩) 원재료명 직접 입력", height=100)
 
         st.markdown("---")
         st.markdown("#### 🏭 공장 알레르기 마스터 설정")
-        factory_allergens = st.text_area(
-            "우리 공장 취급 알레르기 물질 (쉼표로 구분)",
-            "대두, 땅콩, 호두, 잣, 우유, 밀, 복숭아, 토마토, 메밀, 아황산류, 알류",
-            help="여기에 입력된 목록을 기준으로 제품 함유 물질을 제외한 차집합 연산을 수행하여 교차오염 멘트의 누락/중복을 검증합니다."
-        )
+        factory_allergens = st.text_area("우리 공장 취급 알레르기 물질 (쉼표로 구분)", "대두, 땅콩, 호두, 잣, 우유, 밀, 복숭아, 토마토, 메밀, 아황산류, 알류")
+        
         st.markdown("---")
-        product_type = st.radio("📌 1. 식품유형 (냉장표시 검사 스위치)", (
-            "일반식품 (두유류 등 - 냉장표시 의무 없음)", 
-            "특수의료용도식품 / 환자식", 
-            "냉장 축산물 (우유/가공유 등 - 주표시면 냉장표시 강제 스캔)"
-        ))
+        product_type = st.radio("📌 1. 식품유형", ("일반식품 (두유류 등 - 냉장표시 의무 없음)", "특수의료용도식품 / 환자식", "냉장 축산물 (우유/가공유 등)"))
         inspection_mode = st.radio("📌 2. 검토 모드", ("단품(팩/단일포장) 기본 검토", "선물세트 박스(외포장) 교차 검토"))
         doc_type = st.radio("📌 3. 증빙 서류 형태", ("통합 엑셀/PDF 자료 (마스터표 생략)", "개별 원료 한글라벨 무더기 (마스터표 생성)"))
 
         st.markdown("---")
         if inspection_mode == "선물세트 박스(외포장) 교차 검토":
-            st.markdown("#### 📦 [타겟] 박스(외포장) 시안 업로드")
             img_main = st.file_uploader("1️⃣ 박스 주표시면", type=["jpg", "png", "jpeg"])
             img_info = st.file_uploader("2️⃣ 박스 정보표시면", type=["jpg", "png", "jpeg"])
             img_nutri = st.file_uploader("3️⃣ 박스 영양성분표", type=["jpg", "png", "jpeg"])
             img_extra = st.file_uploader("4️⃣ 박스 기타면/측면", type=["jpg", "png", "jpeg"])
-            st.markdown("---")
-            st.markdown("#### 🔍 [비교용] 팩(내포장) 시안 업로드")
             box_main = st.file_uploader("🔍 팩(내포장) 주표시면", type=["jpg", "png", "jpeg"])
             box_info = st.file_uploader("🔍 팩(내포장) 정보표시면", type=["jpg", "png", "jpeg"])
             box_nutri = st.file_uploader("🔍 팩(내포장) 영양성분표", type=["jpg", "png", "jpeg"])
             box_extra = st.file_uploader("🔍 팩(내포장) 기타면/측면", type=["jpg", "png", "jpeg"])
         else:
-            st.markdown("#### 🔹 시안 업로드")
             img_main = st.file_uploader("1️⃣ 시안 주표시면", type=["jpg", "png", "jpeg"])
             img_info = st.file_uploader("2️⃣ 시안 정보표시면", type=["jpg", "png", "jpeg"])
             img_nutri = st.file_uploader("3️⃣ 시안 영양성분표", type=["jpg", "png", "jpeg"])
             img_extra = st.file_uploader("4️⃣ 시안 기타면/측면", type=["jpg", "png", "jpeg"])
-            box_main = None
-            box_info = None
-            box_nutri = None
-            box_extra = None
+            box_main = box_info = box_nutri = box_extra = None
 
-        st.markdown("---")
-        st.markdown("#### 📑 추가 증빙 서류 업로드 (선택사항)")
-        st.info("💡 팁: 실행 파일 옆에 `default_docs` 정규 폴더를 만들고 PDF를 넣어두면 🚀버튼 클릭 시 자동으로 읽어옵니다.")
-        
-        # 🔥 3단 분리 업로더 완벽 적용
         report_docs = st.file_uploader("1️⃣ 시험성적서 (영양성분 검증용)", type=["pdf", "jpg", "png"], accept_multiple_files=True)
         label_docs = st.file_uploader("2️⃣ 원료 한글라벨/스펙 (원재료 1:1 대조용)", type=["pdf", "jpg", "png"], accept_multiple_files=True)
         recipe_docs = st.file_uploader("3️⃣ 배합비/레시피 (🔥2% 순서 검증용)", type=["pdf", "jpg", "png"], accept_multiple_files=True)
 
         def get_uploaded_content():
             user_content = []
+            local_paths = [] # Vision API용 로컬 파일 추적
             DEFAULT_DOCS_DIR = "./default_docs"
 
-            def robust_upload(file_path):
+            def robust_upload(file_path, label):
+                user_content.append(f"### [{label}] ###")
+                if use_vision_api and file_path.lower().endswith(('.png', '.jpg', '.jpeg')):
+                    vision_text = extract_text_with_vision(file_path)
+                    user_content.append(f"[Vision API 순수 OCR 추출 텍스트 (참조용)]\n{vision_text}\n---")
+                
                 max_retries = 5 
                 for attempt in range(max_retries):
                     try:
@@ -511,32 +510,21 @@ def main():
                         while up.state.name == "PROCESSING":
                             time.sleep(3)
                             up = genai.get_file(up.name) 
-                        if up.state.name == "FAILED":
-                            raise Exception("구글 서버에서 파일 처리 FAILED 반환")
-                        return up
+                        if up.state.name == "FAILED": raise Exception("구글 서버 처리 실패")
+                        user_content.append(up)
+                        return
                     except Exception as e:
-                        if attempt == max_retries - 1:
-                            raise e
+                        if attempt == max_retries - 1: raise e
                         time.sleep(3 * (attempt + 1)) 
 
-            if os.path.exists(DEFAULT_DOCS_DIR):
-                auto_files = glob.glob(os.path.join(DEFAULT_DOCS_DIR, "*.pdf"))
-                for file_path in auto_files:
-                    user_content.append(f"### [자동로드_기본서류: {os.path.basename(file_path)}] ###")
-                    user_content.append(robust_upload(file_path))
-
             def process(f, label):
-                user_content.append(f"### [{label}] ###")
-                ext = os.path.splitext(f.name)[1]
-                if not ext:
-                    ext = ".png"
+                ext = os.path.splitext(f.name)[1] or ".png"
                 with tempfile.NamedTemporaryFile(delete=False, suffix=ext) as tmp:
                     tmp.write(f.getbuffer())
                     safe_temp_path = tmp.name
-                user_content.append(robust_upload(safe_temp_path))
-                os.remove(safe_temp_path)
+                local_paths.append(safe_temp_path)
+                robust_upload(safe_temp_path, label)
 
-            # 시안 이미지 처리
             if img_main: process(img_main, "타겟_시안_주표시면")
             if img_info: process(img_info, "타겟_시안_정보표시면")
             if img_nutri: process(img_nutri, "타겟_시안_영양성분표")
@@ -546,7 +534,6 @@ def main():
             if box_nutri: process(box_nutri, "비교용_정답지_시안_영양성분표")
             if box_extra: process(box_extra, "비교용_정답지_시안_기타면_측면")
             
-            # 서류 이미지 명확한 라벨링으로 처리 (AI 환각 방지)
             if report_docs:
                 for f in report_docs: process(f, "수동추가_근거_시험성적서")
             if label_docs:
@@ -554,18 +541,20 @@ def main():
             if recipe_docs:
                 for f in recipe_docs: process(f, "수동추가_배합비_레시피_데이터")
                 
-            return user_content
+            return user_content, local_paths
 
         st.markdown("---")
-        if st.button("🚀 전체 시스템 파일 연동 (기본 폴더 자동 로드 포함)"):
-            with st.spinner("파일을 AI 시스템에 연동 중입니다... (구글 서버 상황에 따라 1~2분 소요될 수 있습니다)"):
-                st.session_state["uploaded_content"] = get_uploaded_content()
+        if st.button("🚀 전체 시스템 파일 연동 (하이브리드 모드 지원)"):
+            with st.spinner("파일을 AI 시스템에 연동 중입니다..."):
+                content, paths = get_uploaded_content()
+                st.session_state["uploaded_content"] = content
+                st.session_state["local_file_paths"] = paths
                 st.success("✅ 파일 등록 완료! 이제 우측 탭에서 검토를 시작하세요.")
 
     # ==========================================
-    # 🔥 3-Pass 파이프라인
+    # 🔥 3-Pass 파이프라인 (Divide & Conquer 미션 쪼개기 적용)
     # ==========================================
-    def run_qc_3pass(tab_rules: str, judgment_prompt: str, extract_mission: str = None):
+    def run_qc_3pass(tab_rules: str, judgment_prompt: str, extract_missions_list: list = None):
         if not st.session_state["uploaded_content"]:
             st.warning("🚨 좌측 사이드바 하단의 [🚀 전체 시스템 파일 연동] 버튼을 먼저 눌러주세요.")
             return None
@@ -582,80 +571,68 @@ def main():
 
         manual_target = st.session_state.get("manual_target", "")
         manual_compare = st.session_state.get("manual_compare", "")
+        
+        extracted_text_combined = ""
 
-        if extract_mission:
-            # ── PASS 1: 순수 텍스트 추출 ──
-            pass1_prompt = f"""
-[PASS 1 - 텍스트 추출 및 서류 파싱 전용 명령]
-⭐ 이 단계에서는 판정이나 평가를 절대 금지합니다. 오직 아래 미션만 텍스트로 추출하여 반환하십시오.
+        if extract_missions_list:
+            # ── PASS 1: 미션 쪼개기 (Divide & Conquer) 반복 스캔 ──
+            extracted_results = []
+            for i, mission in enumerate(extract_missions_list):
+                st.toast(f"🕵️‍♂️ 분할 미션 {i+1}/{len(extract_missions_list)} 추출 중...")
+                pass1_prompt = f"""
+[PASS 1 - 텍스트 단일 추출 미션 (Divide & Conquer)]
+⭐ 이 단계에서는 판정을 금지합니다. 오직 '아래의 특정 미션'에만 시야를 좁혀 텍스트를 추출하십시오. 다른 정보는 무시하십시오.
 
 [사용자 수동 입력 원재료명 데이터 (최우선 적용 정답지!!)]
-- 타겟(박스) 원재료명 수동 입력값: {manual_target if manual_target else '없음'}
-- 비교용(팩) 원재료명 수동 입력값: {manual_compare if manual_compare else '없음'}
-(※ 만약 위 수동 입력값이 '없음'이 아니라면, 시안 이미지에서 흐릿한 텍스트를 억지로 읽어내려 하지 말고, 무조건 이 수동 입력값을 100% 절대 정답으로 사용하여 미션 A를 작성하십시오. 이것이 환각을 막는 절대 규칙입니다.)
+- 타겟(박스) 수동 입력값: {manual_target if manual_target else '없음'}
+- 비교용(팩) 수동 입력값: {manual_compare if manual_compare else '없음'}
 
-{extract_mission}
-
-출력 형식:
-=== [미션 A] 추출 텍스트 ===
-(추출 내용)
-=== [미션 B] 서류 마스터 데이터 (표 형식/해당 시) ===
-(추출 내용)
-=== [미션 C] 배합비 데이터 ===
-(추출 내용 또는 "배합비 데이터 없음")
+🎯 [현재 타겟 미션]:
+{mission}
 """
-            try:
-                pass1_response = model.generate_content(content + [pass1_prompt], generation_config=generation_config, safety_settings=safety_settings, request_options={"timeout": 600})
-                extracted_text = pass1_response.text
-            except Exception as e:
-                return f"🚨 Pass 1 (텍스트 추출) 오류 발생: {e}"
+                try:
+                    pass1_response = model.generate_content(content + [pass1_prompt], generation_config=generation_config, safety_settings=safety_settings, request_options={"timeout": 600})
+                    extracted_results.append(f"=== [미션 {i+1} 결과] ===\n" + pass1_response.text)
+                except Exception as e:
+                    return f"🚨 Pass 1 (단일 추출 {i+1}) 오류 발생: {e}"
+            
+            extracted_text_combined = "\n\n".join(extracted_results)
 
-            # ── PASS 1.5: 자체 검증 (🔥환각/요약 원천 차단 족쇄 강화🔥) ──
+            # ── PASS 1.5: 자체 검증 (환각 차단) ──
             pass15_prompt = f"""
-[PASS 1.5 - 추출 텍스트 자체검증 명령]
-⭐ 당신은 방금 작성한 데이터를 비판적으로 검열하는 '매의 눈 검수관'입니다.
+[PASS 1.5 - 추출 텍스트 종합 자체검증 명령]
+⭐ 당신은 '매의 눈 검수관'입니다. 아래 수집된 분할 미션 결과들을 검열하십시오.
+⭐ [무한 로딩 방지]: 생각 과정을 출력하지 말고, 검증/수정 완료된 텍스트만 출력하십시오.
 
-[Pass 1 추출 텍스트]
-{extracted_text}
+[분할 미션 통합 텍스트]
+{extracted_text_combined}
 
 검증 규칙:
-1. ⭐ [오타 및 환각 원천 차단]: '염화콜린'을 '염화칼륨'으로 잘못 읽는 등, 글자 모양이 비슷하다고 기계의 배경지식으로 단어를 자동완성(소설 작성)하는 미친 환각을 엄격히 금지합니다. 픽셀에 적힌 글자 100% 그대로만 대조하고 복구하십시오.
-2. ⭐ [없는 데이터 창조 금지]: 서류에 없는 원료(예: 산화아연)나 존재하지 않는 배합비 수치(%)를 임의로 창조하여 적어 넣지 마십시오. 없는 것은 무조건 "없음"으로 처리하십시오.
-3. ⭐ [누락/증발 및 요약 절대 금지]: 당신은 요약 봇이 아닙니다! "등", "중략", "..." 등의 표현을 써서 하위 성분을 퉁치는 짓을 완벽히 금지합니다. 원본 텍스트가 50개든 100개든 단 하나의 성분도 누락하지 말고 100% 모조리 텍스트로 복원하십시오.
-4. ⭐ [미션 B/C 표 검증]: 미션 B와 C의 결과물이 존재한다면 반드시 깨지지 않은 마크다운 표(Table) 형태인지 확인하십시오.
-5. ⭐ [긴 목록 스킵 및 조기 종료(Truncation) 절대 금지]: 원재료명이나 리스트를 텍스트로 옮길 때, 기계적 피로도로 인해 뒷부분을 날려먹거나 띄엄띄엄 건너뛰는 행위를 엄격히 통제합니다. 원본 이미지의 마지막 글자가 나올 때까지 출력은 절대 멈출 수 없습니다.
-6. ⭐ [괄호 내부 축약 '(...)' 절대 금지]: 복합원재료나 혼합제제의 괄호() 안에 있는 수십 개의 하위 성분을 기계 임의로 '(...)' 기호로 축약해서 퉁치지 마십시오. 반드시 괄호 안의 모든 글자, 퍼센트(%), 화학기호를 100% 모조리 타이핑해서 복원해야 합니다.
-7. ⭐ [복합 명칭 병합(환각) 및 스킵 절대 금지]: 쉼표(,)로 연결된 길고 복잡한 화학적 명칭들을 스캔할 때, 앞 단어와 뒤 단어를 제멋대로 섞어서 서류에 없는 유령 원료를 창조(병합)하거나, 중간에 있는 핵심 원료를 임의로 누락(스킵)하지 마십시오. 철저하게 쉼표(,) 단위로 끊어서 픽셀 그대로 100% 분리 추출하십시오.
-
-오직 검증 및 수정이 완료된 최종 텍스트만 위와 동일한 구조(=== 미션 A ===, === 미션 B ===, === 미션 C ===)로 화면에 출력하십시오.
+1. ⭐ [오타/환각 원천 차단]: '염화콜린'을 '염화칼륨'으로 잘못 읽는 등 자동완성을 엄격히 금지합니다.
+2. ⭐ [없는 데이터 창조 금지]: 서류에 없는 원료를 창조하지 마십시오.
+3. ⭐ [누락 및 요약 절대 금지]: "등", "..."을 써서 퉁치는 행위를 금지합니다. 100% 모조리 복원하십시오.
+4. ⭐ [XML/JSON 괄호 보존]: 만약 태그나 표로 추출되었다면 그 형태를 훼손하지 마십시오.
 """
             try:
                 pass15_response = model.generate_content(content + [pass15_prompt], generation_config=generation_config, safety_settings=safety_settings, request_options={"timeout": 600})
                 verified_text = pass15_response.text
             except Exception as e:
-                verified_text = extracted_text
+                verified_text = extracted_text_combined
 
         # ── PASS 2: 판정 ──
-        # File API 적용 후 문서(PDF/이미지 래퍼)와 텍스트 프롬프트를 함께 전송
-        docs_only = content 
-
         pass2_context = ""
-        if extract_mission:
+        if extract_missions_list:
             pass2_context = f"""
 ========================================
 [검증된 텍스트 데이터 - Pass 1.5 최종 확정본]
 {verified_text}
 ========================================
 ⭐ [최종 자기검증 명령 및 🔥 Double-Check Protocol]
-1. 판정을 시작하기 전, 위 텍스트에서 실제로 확인된 내용만을 근거로 삼으십시오. 텍스트에 없는 내용을 있다고 판정하는 것을 엄격히 금지합니다.
-2. [부적합 판정 전 의무 재검증]: 당신은 시각적 환각이나 텍스트 스킵을 일으킬 수 있는 AI입니다. 따라서 텍스트가 '누락'되었거나 '불일치'한다고 판단하여 🚨부적합 판정을 내리기 직전, 즉시 판단을 멈추십시오.
-그리고 제공된 [Pass 1.5 최종 확정본] 텍스트의 처음부터 끝까지, 그리고 역순으로 다시 한번 샅샅이 뒤져보십시오. 자간이 좁아 뭉개진 곳에 숨어있는지 최소 3번 이상 교차 검증하십시오.
-정말로 100% 존재하지 않을 때만 🚨를 띄우고, 판정 사유에 반드시 "(재검증 완료: 텍스트 전체를 3회 재스캔하였으나 확인 불가)"라고 명시하십시오. 만약 재검증 중 텍스트를 발견했다면 즉시 ✅적합으로 판정을 정정하십시오.
+1. 위 텍스트에 존재하는 내용만을 근거로 삼으십시오.
+2. 🚨부적합 판정을 내리기 직전, 속으로만 텍스트를 재검색하십시오. 정말로 없을 때만 🚨부적합 처리하십시오.
 """
-
         pass2_prompt = f"""
 [PASS 2 - 룰 판정 전용 명령]
-이 텍스트 데이터만을 사실(FACT)로 사용하여 룰북과 대조 판정하십시오.
 ⭐ 이미지를 직접 다시 참조하는 것을 엄격히 금지합니다. 제공된 문서와 아래 텍스트만 참조하십시오.
 
 [제품유형]: {product_type}
@@ -670,10 +647,10 @@ def main():
 {judgment_prompt}
 """
         try:
-            pass2_response = model.generate_content(docs_only + [pass2_prompt], generation_config=generation_config, safety_settings=safety_settings, request_options={"timeout": 600})
-            if extract_mission:
+            pass2_response = model.generate_content(content + [pass2_prompt], generation_config=generation_config, safety_settings=safety_settings, request_options={"timeout": 600})
+            if extract_missions_list:
                 final_output = (
-                    f"<pass1_log>\n{extracted_text}\n</pass1_log>\n"
+                    f"<pass1_log>\n{extracted_text_combined}\n</pass1_log>\n"
                     f"<pass15_log>\n{verified_text}\n</pass15_log>\n"
                     f"{pass2_response.text}"
                 )
@@ -683,40 +660,21 @@ def main():
         except Exception as e:
             return f"🚨 Pass 2 (룰 판정) 오류 발생: {e}"
 
-    # ==========================================
-    # 종합 보고서 
-    # ==========================================
     def run_qc_model(prompt_text):
         if not st.session_state["uploaded_content"]:
-            st.warning("🚨 좌측 사이드바 하단의 [🚀 전체 시스템 파일 연동] 버튼을 먼저 눌러주세요.")
             return None
-        content = st.session_state["uploaded_content"]
         model = genai.GenerativeModel(MODEL_NAME, system_instruction=SYSTEM_PROMPT)
         generation_config = genai.types.GenerationConfig(temperature=0.0, max_output_tokens=65536)
-        safety_settings = [
-            {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_NONE"},
-            {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_NONE"},
-            {"category": "HARM_CATEGORY_SEXUALLY_EXPLICIT", "threshold": "BLOCK_NONE"},
-            {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_NONE"}
-        ]
         full_prompt = f"""
-        [제품유형]: {product_type}
-        [검토모드]: {inspection_mode}
-        [우리 공장 알레르기 마스터 목록]: {factory_allergens}
-        {RULE_BOOK_FULL}
-        ========================================
-        당신은 지금 선택된 탭의 임무만 완벽하게 수행해야 합니다.
-        {prompt_text}
+        [제품유형]: {product_type}\n[검토모드]: {inspection_mode}\n[우리 공장 알레르기 마스터 목록]: {factory_allergens}
+        {RULE_BOOK_FULL}\n========================================\n당신은 지금 선택된 탭의 임무만 완벽하게 수행해야 합니다.\n{prompt_text}
         """
         try:
-            response = model.generate_content(content + [full_prompt], generation_config=generation_config, safety_settings=safety_settings, request_options={"timeout": 600})
+            response = model.generate_content(st.session_state["uploaded_content"] + [full_prompt], generation_config=generation_config)
             return fix_markdown_table(response.text)
         except Exception as e:
             return f"🚨 시스템 런타임 오류 발생: {e}"
 
-    # ==========================================
-    # 결과 출력 헬퍼
-    # ==========================================
     def display_result(result, tab_name=""):
         if not result: return
         pass1_match = re.search(r'<pass1_log>(.*?)</pass1_log>', result, re.DOTALL)
@@ -725,486 +683,137 @@ def main():
         if pass1_match:
             pass1_log = pass1_match.group(1).strip()
             result = result.replace(pass1_match.group(0), "").strip()
-            with st.expander(f"📋 Pass 1 원본 추출 로그 보기 ({tab_name})"): st.markdown(f"*{pass1_log}*")
+            with st.expander(f"📋 Pass 1 분할 미션 원본 로그 보기 ({tab_name})"): st.markdown(f"*{pass1_log}*")
 
         if pass15_match:
             pass15_log = pass15_match.group(1).strip()
             result = result.replace(pass15_match.group(0), "").strip()
-            with st.expander(f"✅ Pass 1.5 자체검증 완료본 보기 ({tab_name}) ← 실제 판정에 사용된 텍스트"):
-                st.info("💡 Pass 1.5는 Pass 1 추출본을 이미지와 재대조하여 오독/환각을 제거한 최종 확정 텍스트입니다.")
-                st.markdown(f"*{pass15_log}*")
-
-        thinking_match = re.search(r'<thinking>(.*?)</thinking>', result, re.DOTALL)
-        if thinking_match:
-            thinking_log = thinking_match.group(1).strip()
-            result = result.replace(thinking_match.group(0), "").strip()
-            with st.expander(f"🧠 Pass 2 판정 사전 분석 로그 보기 ({tab_name})"): st.markdown(f"*{thinking_log}*")
+            with st.expander(f"✅ Pass 1.5 자체검증 완료본 보기 ({tab_name}) ← 실제 판정에 사용된 텍스트"): st.markdown(f"*{pass15_log}*")
 
         st.markdown(result)
 
     # ==========================================
-    # 탭 UI
+    # 탭 UI (분할 미션 적용)
     # ==========================================
     st.markdown("### 🔍 시안 구간별 정밀 검토")
-    tab1, tab2, tab3, tab4, tab5 = st.tabs([
-        "1️⃣ 주표시면", "2️⃣ 정보표시면", "3️⃣ 영양성분표", "4️⃣ 기타면/측면", "📊 5️⃣ 종합 보고서"
-    ])
+    tab1, tab2, tab3, tab4, tab5 = st.tabs(["1️⃣ 주표시면", "2️⃣ 정보표시면", "3️⃣ 영양성분표", "4️⃣ 기타면/측면", "📊 5️⃣ 종합 보고서"])
 
     # ── TAB 1: 주표시면 ──
     with tab1:
         if st.button("▶️ 주표시면 분석 시작", key="btn_main"):
-            with st.spinner("【3-Pass】 분석 진행 중..."):
-                extract_mission = """
-🎯 [미션 A: 주표시면 텍스트 추출 및 교차검증 스파이 스캔 (내포장/외포장 분리 추출!!)]
-1. [전면 스캔]: '주표시면(앞면)' 시안 사진을 집중적으로 보십시오. 시안이 펼침면(전개도)인 경우, 흩어져 있는 패키지의 앞면, 뒷면, 옆면을 모두 스캔하여 제품명, 내용량, 칼로리, 마케팅 강조문구(설탕 무첨가, 비타민 함유 등)를 빠짐없이 리스트로 작성하십시오. 원재료명 전체는 절대로 추출하지 마십시오.
-   - ⭐ 강력 지시: 검토 모드가 '선물세트 박스(외포장) 교차 검토'라면, 반드시 **[타겟(박스) 주표시면]**과 **[비교용(팩) 주표시면]**의 텍스트를 각각 별도로 분리하여 완벽하게 2세트를 추출하십시오! 둘 중 하나라도 누락하면 안 됩니다.
-2. 🕵️‍♂️ [뒷면 핀셋 스캔 (교차 검증용)]: 전면 스캔이 끝났으면, 첨부된 다른 시안(영양성분표, 정보표시면)들을 빠르게 살펴보고 아래 2가지만 딱 뽑아오십시오.
-   - 영양성분표 사진에 적힌 '총 내용량'과 '총 열량(kcal)' 수치
-   - 앞면에 "OOO 함유" 혹은 "비타민" 등 영양소가 강조되어 있다면, 영양성분표 사진에서 해당 영양소의 '% 기준치' 및 '표시 함량' 수치
-
-🎯 [미션 B: 배합비 및 시험성적서 파싱 (강조 함량 검증용)]
-- 업로드된 서류 중 '배합비(레시피)'가 있다면 강조된 원료(예: L-아르지닌, 오메가3 등)의 투입량(%)을 추출하십시오.
-- 업로드된 서류 중 '시험성적서'가 있다면 강조된 성분의 실측값(예: mg/g)을 추출하여 1팩(또는 총내용량) 기준으로 환산한 값을 적으십시오.
-"""
+            with st.spinner("【분할 미션 스캔 중...】"):
+                missions = [
+                    "주표시면(앞면) 이미지에서 '제품명, 내용량, 칼로리, 마케팅 강조문구'만 리스트로 정확히 추출하십시오. (박스/팩 분리)",
+                    "뒷면/영양성분표 이미지를 스캔하여 '총 내용량' 및 '총 열량(kcal)', 그리고 앞면에 강조된 특정 영양소의 '% 기준치' 수치만 추출하십시오.",
+                    "업로드된 서류(배합비, 성적서)에서 주표시면에 강조된 성분(예: 단백질 등)의 투입량(%)과 실측값(mg/g)을 추출하십시오."
+                ]
                 judgment_prompt = """
-⭐ [영양성분 전면 분석 절대 금지] 1번 탭에서는 성적서 실측값을 환산하여 오차율(%)을 계산하는 작업을 절대 하지 마십시오. 그것은 3번 탭의 고유 권한입니다. 1번 탭에서는 오직 앞면과 뒷면의 '숫자 1:1 일치'만 확인하십시오!
-
 ## 1️⃣ [주표시면 및 마케팅 뱃지]
-- 결론: (✅ 적합 또는 🚨 부적합/확인요망) (Rulebook에 입각하여 법적 사유를 명확히 설명할 것)
-- ⭐ [Rule 71] 강조 폰트 크기 점검 (알림 발생): (제품명에 원료 함량이 있거나 셀링문구가 있는 경우 무조건 ⚠️플래그를 띄우고 규정 폰트 크기 육안 확인을 지시할 것)
-- ⭐ [Rule 72] 조리예/이미지 사진 표기 유무 점검:
-- ⭐ [Rule 62] 축산물 보관상태(냉동/냉장) 주표시면 명시 강제 점검: (증빙 서류가 없더라도 다른 시안 텍스트에서 '냉장보관' 단어가 스캔되면 제품유형을 '냉장'으로 간주하고 주표시면을 스캔할 것)
-- ⭐ [Rule 63] 미드팩 190mL 질소충전 점검: (내용량이 190mL인지 파악하고, 맞다면 4번 탭 기타면에서 '질소충전' 문구를 반드시 확인해야 한다고 🚨확인 요망을 띄울 것)
-- ⭐ [Rule 3] 세트포장(박스) 앞면 총내용량 및 총열량 강제 스캔: 세트포장 검토 모드일 경우, 박스 앞면(주표시면)에 반드시 '총 내용량(예: 125mL x 24팩)'과 그에 상응하는 '총 열량(kcal)'이 모두 적혀 있어야 합니다. 글자가 아예 없거나, 수량만 있고 총 열량이 없거나, 단품 열량만 덜렁 적혀있다면 즉시 🚨부적합 처리하고 총 열량을 수학적으로 계산하여 팩트 폭격을 날리십시오.
+- 결론: (✅ 적합 또는 🚨 부적합/확인요망)
+- ⭐ [Rule 71] 강조 폰트 크기 점검 (알림 발생): 
+- ⭐ [Rule 72] 조리예/이미지 사진 표기 점검:
+- ⭐ [Rule 62] 축산물 보관상태(냉동/냉장) 주표시면 명시: 
+- ⭐ [Rule 63] 미드팩 190mL 질소충전 점검: 
+- ⭐ [Rule 3] 세트포장(박스) 앞면 총내용량 및 총열량 누락 검증: 
 - ⭐ [Rule 68] 다포장 낱팩 복붙 스나이퍼: 
-- ⭐ [Rule 60 범용 적용] 제품명에 강조된 '타겟 원료'가 '페이스트, 농축액...' 형태일 때 괄호 안에 타겟 원물의 함량(%)이 있는지 강제 검증. (주의: 강조되지 않은 조연 원물의 함량 생략은 합법이므로 역산/지적 절대 금지):
-- ⭐ [Rule 64] 원물 기만표시(99.9% 등) 스나이퍼 스캔:
-- ⭐ [마케팅 강조 수치(mg/g) 하이브리드 검증 (배합비+성적서)]: 
-  주표시면에 특정 성분(예: L-아르지닌 500mg) 함량이 강조된 경우, 반드시 아래 3단계를 거쳐 판정하십시오.
-  1) 배합비 기반 환산: 배합비 투입량(%) * 1팩 용량(g/mL) = 순수 첨가량(mg)
-  2) 성적서 기반 환산: 성적서 실측값(mg/g) * 1팩 용량(g/mL) = 총 함량(mg)
-  3) 판정: 성적서상 총 함량이 표시 수치의 80% 이상을 만족한다면, "배합비 상 순수 첨가량은 OO mg에 불과하지만, 성적서상 단백질원 등 자연 유래를 포함한 총 함량이 OO mg으로 측정되어 표기(OO mg)에 적합(✅)합니다."라고 사유를 적어 방어 논리를 펼치십시오. 만약 성적서 데이터가 아예 없고 배합비 환산량마저 표시치에 미달할 때만 과대광고(🚨부적합)로 지적하십시오.
-- ⭐ [Rule 47] 박스 vs 팩 앞면 뼈대 정보 교차 검증 (제품명, 총내용량, 강조원료 함량 모순 여부):
-- ⭐ [Rule 50] 원액/추출물 고형분 병기 및 명칭 적합성:
-- 추가 마케팅 문구(추출분말 등) 적합성:
-- ⭐ [Rule 24] 당류 강조표시(무당/저당/무가당/설탕무첨가) 적합성 검증:
-   (※ 아래 1, 2, 3번 항목을 각각 분리하여 꼼꼼하게 검증 및 보고할 것)
-   1) 감미료 문구 위치: (주의: '저당' 단독 강조면 해당없음(✅) 처리할 것. 무당/무가당 강조 시에만 알룰로스 등 식품원료를 제외하고 감미료 함유 문구 누락 여부 판정)
-   2) 열량 병기 위치: '무가당/저당/설탕무첨가' 문구와 '총 열량(kcal)' 수치가 모두 스캔되었다면, 기계는 1차적으로 '✅ 텍스트 표기 적합'으로 판정하십시오. ⭐ 단, 반드시 그 옆에 '(⚠️ 육안 거리 확인 요망: 식약처 규정상 두 문구는 소비자가 한눈에 볼 수 있도록 물리적으로 인접해 있어야 합니다. 원본 시안에서 두 글자가 멀리 떨어져 있지 않은지 실무자가 눈으로 최종 확인하십시오.)'라는 꼬리말을 강제로 붙이십시오. 열량 수치가 아예 없다면 🚨 부적합 처리하십시오.
-   3) 당류 함량 확인: ('저당'의 경우 100mL당 2.5g 미만 컷오프를 충족하는지 뒷면 데이터로 강제 교차 확인하여 판정)
-- ⭐ [Rule 52] 영양강조 컷오프 정밀 타겟팅: (강조된 영양소 명칭이 단백질인지, 식이섬유인지, 비타민인지 파악하고 Rule 52에 명시된 100kcal당 환산 등 '4대 조건'을 모두 대입하여 하나라도 통과하는지 강제 검증할 것)
-- 기타 특이사항:
-
+- ⭐ [Rule 60] 강조 원물 복합원재료 시 배합함량 기재 검증: 
+- ⭐ [Rule 64] 원물 기만표시(99.9% 등) 스캔:
+- ⭐ 마케팅 강조 수치(mg/g) 하이브리드 검증 (배합비+성적서): 
+- ⭐ [Rule 47] 박스 vs 팩 뼈대 정보 교차 검증:
+- ⭐ [Rule 50] 원액/추출물 고형분 병기:
+- ⭐ [Rule 24] 당류 강조표시(무당/저당/무가당/설탕무첨가) 검증 (감미료 문구, 열량 병기, 컷오프):
+- ⭐ [Rule 52] 영양강조 컷오프(4대 조건) 검증:
 ## 🔍 [전 구간 공통: 수량 모순 및 오탈자 검증]
-- ⭐ 포장 단위(수량) 2-Track 검증 (단품/세트 열량 반올림 오차 허용):
-- ⭐ [Rule 69] 비타민 아래첨자 스나이퍼:
-- ⭐ 띄어쓰기 및 오탈자 적발: (글자 단위 1:1 대조. ⭐[전 구역 범용 띄어쓰기/오탈자 무관용 전수 검사 (AI 자동완성 영구 차단)]: 텍스트의 문맥을 파악하여 임의로 띄어쓰기를 교정해서 읽는 행위(뇌내 보정)를 영구적으로 차단합니다. 전체 텍스트를 한 글자씩 스캔하여, 한국어 맞춤법상 반드시 띄어 써야 하는 두 단어(명사와 명사 등)가 픽셀 상에서 공백 없이 붙어있다면, 단 하나도 빠짐없이 100% 모두 찾아내어 🚨부적합(띄어쓰기 오류)으로 나열하십시오. 적당히 몇 개만 찾고 얼버무리는 조기 종료나 똑같은 글자를 두고 오류라고 우기는 환각을 엄격히 금지합니다.)
+- ⭐ 띄어쓰기 및 오탈자 적발: (100% 무관용 전수 검사)
 """
-                st.session_state["result_tab1"] = run_qc_3pass(RULES_TAB1, judgment_prompt, extract_mission)
+                st.session_state["result_tab1"] = run_qc_3pass(RULES_TAB1, judgment_prompt, missions)
         display_result(st.session_state["result_tab1"], "주표시면")
 
-    # ── TAB 2: 정보표시면 (🌟 완벽 개편된 3단 분리 & 2% 룰 적용 코드) ──
+    # ── TAB 2: 정보표시면 ──
     with tab2:
         if st.button("▶️ 정보표시면 원재료 기계적 1:1 맵핑 시작", key="btn_info"):
-            with st.spinner("【3-Pass】 시안, 서류, 배합비 정밀 분석 진행 중..."):
-                extract_mission = """
-🎯 [미션 A: 정보표시면 시각 데이터 '독립' 강제 추출 (초정밀 OCR 분해 모드!!)]
-⭐ 경고: LLM의 '비슷한 이미지 스킵(환각)' 현상을 엄격히 통제합니다! 당신에게는 [타겟_시안_정보표시면]과 [비교용_정답지_시안_정보표시면] 두 장의 이미지가 입력되었습니다.
-1. 절대 두 이미지의 내용을 하나로 합치거나, 한쪽만 읽고 다른 쪽을 지레짐작으로 채우지 마십시오.
-2. '구연산나트륨'과 '구연산삼나트륨'처럼 미세한 차이가 존재합니다. 픽셀에 적힌 그대로 토시 하나 틀리지 말고 각각 따로 추출하십시오.
-3. ⭐ [초정밀 분해 및 절대 복사기 모드 발동]: 당신은 요약 봇이 아닙니다! 긴 복합원재료명(비타민미네랄프리믹스 등)이 나오더라도 절대 임의로 생략, 요약, 순서 변경, 화학명 치환(예: D-토코페롤 -> 비타민E)을 하지 마십시오. 퍼센트(%), 괄호 안 하위 성분, 미량 원료(타우린, 황산동 등)를 단 하나도 빼먹지 말고 픽셀에 적힌 그대로 100% 모조리 타이핑하십시오. 반드시 '쉼표(,)'를 기준으로 쪼개서 번호를 매겨 추출하십시오.
-4. 알레르기(OO 함유) 텍스트는 원재료명 리스트에서 제외하고 따로 뽑으십시오.
-5. ⭐ [교차오염 및 CS 주의문구 추출]: 정보표시면에 "...같은 제조시설에서 제조하고 있습니다" 같은 교차오염 문구와 "개봉 후 냉장보관", "침전물", "용기 팽창" 등 주의사항 문구가 적혀 있다면 반드시 모두 추출하십시오.
-6. ⭐ [행정 정보 스캔]: 정보표시면에 있는 '제조원(또는 유통전문판매원)', '포장재질(세부 뚜껑 재질 포함)', '품목제조보고번호'를 찾아내어 추출하십시오. (검토 모드가 선물세트 박스라면 타겟과 비교용에서 분리해서 추출할 것)
-
-🎯 [미션 B: 증빙 서류 파싱 (마스터 정답지 구축 - 100% 무결점 복제 모드)]
-- 한글라벨, 스펙 서류, 성적서 등을 읽을 때 당신은 '판독기'가 아니라 '무결점 복사기'입니다. 서류에 적힌 원료가 50개든 100개든 절대 중간에 끊거나 요약하지 마십시오. 특히 문서 하단이나 괄호 구석에 박혀있는 미량 첨가물(향료, 감미료, 비타민 등)을 단 하나라도 빼먹으면 시스템이 붕괴됩니다. 눈에 보이는 픽셀 전부를 끝까지 모조리 긁어오십시오.
-- 업로드된 서류(한글라벨 등)에서 원료 제품명, 하위 성분(100% 나열), 원산지, 알레르기 물질을 표로 추출하십시오.
-
-🎯 [미션 C: 배합비(레시피) 데이터 추출 (신규 추가)]
-- 업로드된 배합비(레시피) 이미지/문서가 존재한다면, `[원료명]`과 `[배합비율(%)]`을 소수점까지 단 하나의 오차 없이 추출하여 마크다운 표로 작성하십시오.
-- 배합비 데이터가 없다면 "배합비 데이터 없음"이라고 명시하십시오.
-
-[출력 필수 양식]
-=== [미션 A-1] 타겟(박스) 시안 원재료명 ===
-(1. OO, 2. OO, 3. OO ... 중략 절대 금지, 끝까지 100% 나열)
-=== [미션 A-2] 비교용(팩) 시안 원재료명 ===
-(1. OO, 2. OO, 3. OO ... 중략 절대 금지, 끝까지 100% 나열)
-=== [미션 A-3] 알레르기 유발물질 (직접 함유) ===
-타겟(박스): [내용]
-비교용(팩): [내용]
-=== [미션 A-4] 주의사항 (교차오염 및 CS 문구 전체) ===
-타겟(박스): [내용]
-비교용(팩): [내용]
-=== [미션 A-5] 행정 정보 (제조원, 포장재질, 품목보고번호) ===
-타겟(박스): [내용]
-비교용(팩): [내용]
-=== [미션 B] 서류 마스터 데이터 (표 형식) ===
-(표 내용)
-=== [미션 C] 배합비 데이터 ===
-| 원료명 | 배합비율(%) |
-|---|---|
-(표 내용 또는 "배합비 데이터 없음")
-"""
+            with st.spinner("【분할 미션 스캔 중... (시간이 소요됩니다)】"):
+                missions = [
+                    "오직 '타겟(박스) 시안'의 원재료명 리스트만 추출하십시오. 쉼표(,)를 기준으로 XML 태그 `<item>원재료</item>` 형태로 감싸서 100% 모두 나열하십시오. 중략 절대 금지.",
+                    "오직 '비교용(팩) 시안'이 있다면 해당 원재료명 리스트만 추출하십시오. XML 태그 `<item>원재료</item>` 형태로 감싸서 100% 모두 나열하십시오.",
+                    "정보표시면에 있는 '알레르기 유발물질(OO 함유 등)', '교차오염 주의문구', '기타 CS 주의문구(침전물, 팽창 등)' 텍스트만 추출하십시오.",
+                    "정보표시면의 행정 정보(제조원, 포장재질, 품목제조보고번호)만 추출하십시오.",
+                    "증빙 서류(한글라벨, 성적서)의 모든 원료명, 하위 성분(100%), 원산지를 표로 추출하십시오.",
+                    "배합비(레시피) 서류가 있다면 원료명과 배합비율(%)을 표로 추출하십시오. 없으면 '없음' 명시."
+                ]
+                
                 base_tab2_warning = """
 ⭐ [1:1 대조 예외 절대 원칙 (Rule 2, 34, 35, 65 우선 적용)] ⭐
-서류와 시안을 대조할 때는 아래 4가지 룰이 무조건 우선합니다.
-1. (Rule 2) 서류에 구체적 향료명이 있어도 시안에 '향료'로 묶어 표기한 경우. (향료2종 등 숫자 붙인 것도 실무 허용)
-2. (Rule 34) 배합비 2% 미만인 원료들끼리의 기재 순서가 서류와 다른 경우.
-3. (Rule 35) 공전 공식 명칭(CMC-Na 등)이나 통용명(무수구연산->구연산)으로 간략화한 경우.
-4. (Rule 65) 서류의 원료명 내부 코드(예: '-2')가 생략된 경우.
-
-🔥 [시스템 절대 족쇄: 순서 검증 시 환각 및 얼렁뚱땅 금지] 🔥
-1. 배합비 의존성: [미션 C]에 배합비 데이터가 없을 경우, "배합비 데이터가 제공되지 않아 순서 검증을 생략합니다."라고 명시하고 절대 임의로 순서를 유추하거나 평가하지 마십시오.
-2. 2% 기준선 강제 분리: 배합비가 존재할 경우, 반드시 검증 보고서에 [2% 이상 구역]과 [2% 미만 구역]을 시각적으로 명확히 분리하여 제시하십시오.
-3. 수학적 증명 강제: 혼합제제의 하위 성분 순서를 판정할 때는 얼렁뚱땅 "순서가 맞습니다"라고 넘기지 말고, 반드시 환산 수식(예: 1.25% × 29.18% = 환산 투입량 0.364%)을 명시하여 증명하십시오.
-4. 역전 판정 기준: [2% 이상 구역]에서는 0.001%라도 순서가 뒤집히면 즉시 🚨부적합을 띄우십시오. [2% 미만 구역]에 속한 성분들은 순서가 섞여 있어도 Rule 34에 의거하여 ✅합법(순서 무관)으로 판정하십시오.
-
-🔥 [공식 보고서 작성 절대 규칙 및 마크다운 표 강제 규정] 🔥
-1. **[표 구조 붕괴 절대 금지]**: 모든 표는 반드시 Markdown 형식(`| 컬럼 | 컬럼 |`)을 엄격하게 유지해야 합니다. 텍스트가 뭉개지거나 시스템 로그 태그가 셀 안에 들어가지 않도록 깨끗하게 정리하십시오.
-2. 표의 가장 맨 왼쪽 열(Column 1)은 반드시 "[미션 A]에서 추출한 타겟 시안 원재료명 리스트"를 그대로 복붙해야 합니다. 
-3. [원산지 도출 로직]: 표에 이 원료가 왜 원산지가 적혔는지 명확히 기재하십시오. (예: `1순위(의무)`, `제외대상(당류)`)
-4. [최종 누락 스나이퍼]: 서류에는 있지만 시안에서 통째로 누락된 원료를 적발하십시오.
-5. ⭐ [절대 생략 금지 (No Truncation) - 실무 QC 보고서 원칙]: 환자용 식품처럼 원재료가 40~50개에 달하더라도 표 작성 시 "중략", "...", "후략" 등의 요약/생략을 엄격히 금지합니다. 미션 A에서 추출한 [1번 원료부터 마지막 원료까지 100% 전부] 표의 행(Row)으로 생성하여 1:1 대조 판정을 작성해야 합니다. 단 하나라도 생략하면 치명적인 시스템 오류로 간주됩니다.
-6. ⭐ [N종 묶음 불가]: 향료나 영양강화제(표6)가 아닌 일반 원료에 '2종' 등 숫자가 붙어있으면 가차없이 🚨부적합 처리하십시오.
+🔥 [시스템 절대 족쇄: 순서 검증 시 환각 및 얼렁뚱땅 금지 (2% 기준선 강제 분리)] 🔥
+🔥 [마크다운 표 강제 규정 (No Truncation - 중략 시 시스템 붕괴)] 🔥
 """
+                # 판정 프롬프트는 검토 모드에 따라 분기 (이전 코드와 동일한 로직 유지)
                 if doc_type == "통합 엑셀/PDF 자료 (마스터표 생략)":
-                    if inspection_mode == "선물세트 박스(외포장) 교차 검토":
-                        judgment_prompt = base_tab2_warning + """
-## 1️⃣ [Rule 70. 내포장(팩) vs 외포장(박스) 1:1 물리적 픽셀 대조 (의미 해석 절대 금지!)]
-- ⭐ [시각 트랙 - 동의어 허용(Rule 35) 절대 금지!]: 팩과 박스 시안을 서로 비교할 때는 당신의 '의미 해석 능력'을 강제로 꺼버리십시오. 미션 A-1(박스)과 A-2(팩)의 텍스트를 글자 단위로 대조하여, '구연산나트륨'과 '구연산삼나트륨'처럼 화학적으로 완벽히 동일하더라도 **눈에 보이는 글자, 기호, 띄어쓰기가 단 하나라도 다르면 무조건 🚨부적합 처리**하고 정확히 어느 원료의 표기가 다른지 명시하십시오. 완전히 픽셀이 동일할 때만 ✅적합입니다.
-- 검증 결과: (상세 비교 결과 및 판정)
-
-## 2️⃣ [마스터 서류 vs 시안 법적 교차 검증 (Rule 35 동의어/간략명 허용)]
-| 타겟(박스) 시안 표기 원재료명 (순서대로 100% 나열, 중략 금지) | 매칭된 마스터 서류 원료명 | 원산지 산정 순위 | 대조 검증 (오탈자/합법 간략화) | 판정 (상세 사유) |
-|---|---|---|---|---|
-| (시안 기준 100% 나열) | (서류 원료명) | (도출 사유) | (검증 결과) | (✅/🚨 판정 및 사유) |
-※ ⭐ [절대 원칙: 엑셀 VLOOKUP 하드 매핑 및 의미론적 맵핑 영구 차단]: 표를 작성할 때 단어의 의미나 카테고리(예: 가공유지=기름=MCT오일)를 유추하여 맵핑하는 '의미론적 추론'을 영구히 차단합니다. 당신의 배경지식을 절대 개입시키지 마십시오. 오직 제공된 [미션 B] 서류 데이터 전체(특히 프리믹스의 하위 성분 리스트 끝까지)를 대상으로 '텍스트(글자) 일치 여부'만 1순위로 샅샅이 뒤지십시오. 시안에 '가공유지'가 있다면, 서류 어딘가에 똑같이 '가공유지'라고 적힌 곳을 찾아 1:1 하드 맵핑(Hard-Mapping)해야 합니다.
-※ [법규 트랙]: 여기서는 시안 명칭이 서류와 물리적으로 다르더라도, 표시기준 표5나 표6에 따른 합법적인 동의어/간략명(Rule 35)인 경우 ✅적합으로 판정하십시오. 단, 판정 란에 `🌟 [표5/6 치환 알림] 합법적 동의어/간략명 표기. 한번 더 확인해 보세요.` 라는 코멘트를 반드시 추가하십시오.
-
-### 🚨 [서류 기준 최종 누락 스나이퍼 검증]
-- 마스터 정답지에는 존재하지만 타겟(박스) 시안에서 통째로 누락된 원료/하위성분: (없으면 '누락 없음 ✅')
-
-## ⚖️ 3️⃣ [배합비 기반 2% 룰 및 전개 순서 정밀 검증 (Rule 34)]
-- ⭐ 배합비 유무: ([미션 C] 데이터 존재 여부 명시)
-- 📌 [2% 이상 구역 (순서 엄수)]:
-  * 시안 내 순서:
-  * 판정: (환산 수식 기반 ✅/🚨 상세 판정)
-- 📌 [2% 미만 구역 (순서 무관)]:
-  * 시안 내 순서:
-  * 판정: (Rule 34에 의거 섞여 있어도 합법이면 ✅적합 처리)
-
-## 4️⃣ [알레르기, 주의사항 교차 검증 (CS 클레임 방어 포함)]
-- 서류 기준, 박스와 팩의 '~함유' 알레르기 표시 완벽 일치 여부: (✅/🚨)
-- ⭐ [Rule 38] 교차오염 문구 적합성 (수학적 차집합 검증): 
-- ⭐ [Rule 74] 개봉 후 냉장보관 주의문구 점검:
-- ⭐ [Rule 75] CS 방어용 문구(침전물, 용기팽창) 점검:
-- ⭐ [Rule 7] 당알코올 주의문구 적합성 검증 (10% 이상일 때만 표시):
-
-## 🏛️ 5️⃣ [행정 정보 교차 검증 (제조원, 포장재질, 품목보고번호)]
-- ⭐ [Rule 20, 73] 포장재질 표시 적합성: (종이 박스에 폴리에틸렌 등 내포장 재질만 적혀있어도 완벽히 합법이므로 오판 금지. 단, 뚜껑 있는 팩인 경우 뚜껑: HDPE 등 세부 재질 누락 여부 점검)
-- ⭐ 제조원/유통전문판매원 및 품목보고번호 검증: 서류(마스터) 정보와 일치하는지, 오탈자는 없는지 점검하십시오. (단, 다포장 박스일 경우 낱팩과 복붙 에러가 없는지 교차 대조할 것)
-
-## 🔍 6️⃣ [전 구간 공통: 수량 모순 및 오탈자 검증]
-- ⭐ [Rule 68] 정보표시면 내용량 복붙 스나이퍼: (주의: 영양성분표 파트는 3번 탭 AI가 검사하므로 넌 절대 찾지 마라! 넌 오직 정보표시면의 '내용량' 텍스트만 스캔해서 단독 표기(예: 125mL)인지 판정해!)
-- ⭐ 포장 단위(수량) 2-Track 검증:
-- ⭐ [Rule 69] 비타민 아래첨자 스나이퍼:
-- ⭐ 띄어쓰기 및 오탈자 적발: (글자 단위 1:1 대조. ⭐[전 구역 범용 띄어쓰기/오탈자 무관용 전수 검사 (AI 자동완성 영구 차단)]: 텍스트의 문맥을 파악하여 임의로 띄어쓰기를 교정해서 읽는 행위(뇌내 보정)를 영구적으로 차단합니다. 전체 텍스트를 한 글자씩 스캔하여, 한국어 맞춤법상 반드시 띄어 써야 하는 두 단어(명사와 명사 등)가 픽셀 상에서 공백 없이 붙어있다면, 단 하나도 빠짐없이 100% 모두 찾아내어 🚨부적합(띄어쓰기 오류)으로 나열하십시오. 적당히 몇 개만 찾고 얼버무리는 조기 종료나 똑같은 글자를 두고 오류라고 우기는 환각을 엄격히 금지합니다.)
-"""
-                    else:
-                        judgment_prompt = base_tab2_warning + """
-## 1️⃣ [마스터 서류 vs 시안 법적 교차 검증 (Rule 35 동의어/간략명 허용)]
-| 시안 표기 원재료명 (패키지 나열 순서 100% 나열, 중략 금지) | 매칭된 마스터 서류 원료명 | 원산지 산정 순위 | 대조 검증 (오탈자/합법 간략화) | 판정 (상세 사유) |
-|---|---|---|---|---|
-| (시안 기준 100% 나열) | (서류 원료명) | (도출 사유) | (검증 결과) | (✅/🚨 판정 및 사유) |
-※ ⭐ [절대 원칙: 엑셀 VLOOKUP 하드 매핑 및 의미론적 맵핑 영구 차단]: 표를 작성할 때 단어의 의미나 카테고리(예: 가공유지=기름=MCT오일)를 유추하여 맵핑하는 '의미론적 추론'을 영구히 차단합니다. 당신의 배경지식을 절대 개입시키지 마십시오. 오직 제공된 [미션 B] 서류 데이터 전체(특히 프리믹스의 하위 성분 리스트 끝까지)를 대상으로 '텍스트(글자) 일치 여부'만 1순위로 샅샅이 뒤지십시오. 시안에 '가공유지'가 있다면, 서류 어딘가에 똑같이 '가공유지'라고 적힌 곳을 찾아 1:1 하드 맵핑(Hard-Mapping)해야 합니다.
-※ [법규 트랙]: 시안 명칭이 서류와 물리적으로 다르더라도, 표시기준 표5나 표6에 따른 합법적인 동의어/간략명(Rule 35)인 경우 ✅적합으로 판정하십시오. 단, 판정 란에 `🌟 [표5/6 치환 알림] 합법적 동의어/간략명 표기. 한번 더 확인해 보세요.` 라는 코멘트를 반드시 추가하십시오.
-
-### 🚨 [서류 기준 최종 누락 스나이퍼 검증]
-- 마스터 정답지에는 존재하지만 시안에서 통째로 누락된 원료/하위성분: (없으면 '누락 없음 ✅')
-
-## ⚖️ 2️⃣ [배합비 기반 2% 룰 및 전개 순서 정밀 검증 (Rule 34)]
-- ⭐ 배합비 유무: ([미션 C] 데이터 존재 여부 명시)
-- 📌 [2% 이상 구역 (순서 엄수)]:
-  * 시안 내 순서:
-  * 판정: (환산 수식 기반 ✅/🚨 상세 판정)
-- 📌 [2% 미만 구역 (순서 무관)]:
-  * 시안 내 순서:
-  * 판정: (Rule 34에 의거 섞여 있어도 합법이면 ✅적합 처리)
-
-## 3️⃣ [알레르기, 주의사항 교차 검증 (CS 클레임 방어 포함)]
-- 서류 기반 알레르기 정보 표시 적합성: (✅/🚨)
-- ⭐ [Rule 38] 교차오염 문구 적합성 (수학적 차집합 검증): 
-- ⭐ [Rule 74] 개봉 후 냉장보관 주의문구 점검:
-- ⭐ [Rule 75] CS 방어용 문구(침전물, 용기팽창) 점검:
-- ⭐ [Rule 7] 당알코올 주의문구 적합성 검증 (10% 이상일 때만 표시):
-
-## 🏛️ 4️⃣ [행정 정보 교차 검증 (제조원, 포장재질, 품목보고번호)]
-- ⭐ [Rule 73] 포장재질 세부 점검: (뚜껑 있는 팩인 경우 뚜껑: HDPE 등 세부 재질 누락 여부 점검)
-- ⭐ 제조원/유통전문판매원 및 품목보고번호 검증: 서류(마스터) 정보와 일치하는지, 오탈자는 없는지 점검하십시오.
-
-## 🔍 5️⃣ [전 구간 공통: 수량 모순 및 오탈자 검증]
-- ⭐ 포장 단위(수량) 2-Track 검증:
-- ⭐ [Rule 69] 비타민 아래첨자 스나이퍼:
-- ⭐ 띄어쓰기 및 오탈자 적발: (글자 단위 1:1 대조. ⭐[전 구역 범용 띄어쓰기/오탈자 무관용 전수 검사 (AI 자동완성 영구 차단)]: 텍스트의 문맥을 파악하여 임의로 띄어쓰기를 교정해서 읽는 행위(뇌내 보정)를 영구적으로 차단합니다. 전체 텍스트를 한 글자씩 스캔하여, 한국어 맞춤법상 반드시 띄어 써야 하는 두 단어(명사와 명사 등)가 픽셀 상에서 공백 없이 붙어있다면, 단 하나도 빠짐없이 100% 모두 찾아내어 🚨부적합(띄어쓰기 오류)으로 나열하십시오. 적당히 몇 개만 찾고 얼버무리는 조기 종료나 똑같은 글자를 두고 오류라고 우기는 환각을 엄격히 금지합니다.)
-"""
+                    judgment_prompt = base_tab2_warning + "## 1️⃣ [Rule 70. 내포장 vs 외포장 1:1 대조]\n- 검증 결과:\n## 2️⃣ [마스터 서류 vs 시안 교차 검증]\n(여기에 1:1 대조 표 작성, 생략 금지)\n### 🚨 [누락 스나이퍼]\n## 3️⃣ [배합비 2% 순서 검증]\n## 4️⃣ [알레르기, 주의사항 교차 검증]\n## 5️⃣ [행정 정보 교차 검증]\n## 6️⃣ [오탈자 전수 검증]"
                 else:
-                    if inspection_mode == "선물세트 박스(외포장) 교차 검토":
-                        judgment_prompt = base_tab2_warning + """
-## 1️⃣ [원료 스펙 마스터 취합표 (개별 라벨 기반 자동 생성)]
-⭐ [마스터표 행(Row) 증발 절대 금지]: 업로드된 개별 원료 서류가 여러 개면, 이 표의 행(Row)도 반드시 서류 개수만큼 끝까지 전부 그려야 합니다! 기계 임의로 2~3개만 적고 "등", "중략" 처리하거나 출력을 끊어버리면 시스템이 붕괴됩니다. 첫 번째 원료부터 마지막 원료까지 100% 빠짐없이 표를 끝까지 그리십시오.
-| 매칭된 증빙 서류명 | 원료 제품명 | 식품유형 | 한글표시사항 (하위 전개 성분) | 원산지 | 알레르기 물질 |
-|---|---|---|---|---|---|
-| (서류명) | (제품명) | (유형) | (성분 전개) | (원산지) | (OO 함유 또는 해당 없음) |
+                    judgment_prompt = base_tab2_warning + "## 1️⃣ [원료 스펙 마스터 취합표]\n## 2️⃣ [Rule 70. 내포장 vs 외포장 1:1 대조]\n## 3️⃣ [마스터 서류 vs 시안 교차 검증]\n(여기에 1:1 대조 표 작성, 생략 금지)\n### 🚨 [누락 스나이퍼]\n## 4️⃣ [배합비 2% 순서 검증]\n## 5️⃣ [알레르기, 주의사항 교차 검증]\n## 6️⃣ [행정 정보 교차 검증]\n## 7️⃣ [오탈자 전수 검증]"
 
-## 2️⃣ [Rule 70. 내포장(팩) vs 외포장(박스) 1:1 물리적 픽셀 대조 (의미 해석 절대 금지!)]
-- ⭐ [시각 트랙 - 동의어 허용(Rule 35) 절대 금지!]: 팩과 박스 시안을 서로 비교할 때는 당신의 '의미 해석 능력'을 강제로 꺼버리십시오. 미션 A-1(박스)과 A-2(팩)의 텍스트를 글자 단위로 대조하여, '구연산나트륨'과 '구연산삼나트륨'처럼 화학적으로 완벽히 동일하더라도 **눈에 보이는 글자, 기호, 띄어쓰기가 단 하나라도 다르면 무조건 🚨부적합 처리**하고 정확히 어느 원료의 표기가 다른지 명시하십시오. 완전히 픽셀이 동일할 때만 ✅적합입니다.
-- 검증 결과: (상세 비교 결과 및 판정)
-
-## 3️⃣ [마스터 서류 vs 시안 법적 교차 검증 (Rule 35 동의어/간략명 허용)]
-| 타겟(박스) 시안 표기 원재료명 (순서대로 100% 나열, 중략 금지) | 매칭된 위 마스터 표 원료명 | 원산지 산정 순위 | 대조 검증 (오탈자/순서/합법 간략화) | 판정 (상세 사유) |
-|---|---|---|---|---|
-| (시안 기준 100% 나열) | (서류 원료명) | (도출 사유) | (검증 결과) | (✅/🚨 판정 및 사유) |
-※ ⭐ [절대 원칙: 엑셀 VLOOKUP 하드 매핑 및 의미론적 맵핑 영구 차단]: 표를 작성할 때 단어의 의미나 카테고리(예: 가공유지=기름=MCT오일)를 유추하여 맵핑하는 '의미론적 추론'을 영구히 차단합니다. 당신의 배경지식을 절대 개입시키지 마십시오. 오직 제공된 [미션 B] 서류 데이터 전체(특히 프리믹스의 하위 성분 리스트 끝까지)를 대상으로 '텍스트(글자) 일치 여부'만 1순위로 샅샅이 뒤지십시오. 시안에 '가공유지'가 있다면, 서류 어딘가에 똑같이 '가공유지'라고 적힌 곳을 찾아 1:1 하드 맵핑(Hard-Mapping)해야 합니다.
-※ [법규 트랙]: 여기서는 시안 명칭이 서류와 물리적으로 다르더라도, 표시기준 표5나 표6에 따른 합법적인 동의어/간략명(Rule 35)인 경우 ✅적합으로 판정하십시오. 단, 판정 란에 `🌟 [표5/6 치환 알림] 합법적 동의어/간략명 표기. 한번 더 확인해 보세요.` 라는 코멘트를 반드시 추가하십시오.
-
-### 🚨 [서류 기준 최종 누락 스나이퍼 검증]
-- 마스터 정답지에는 존재하지만 타겟(박스) 시안에서 통째로 누락된 원료/하위성분: (없으면 '누락 없음 ✅')
-
-## ⚖️ 4️⃣ [배합비 기반 2% 룰 및 전개 순서 정밀 검증 (Rule 34)]
-- ⭐ 배합비 유무: ([미션 C] 데이터 존재 여부 명시)
-- 📌 [2% 이상 구역 (순서 엄수)]:
-  * 시안 내 순서:
-  * 판정: (환산 수식 기반 ✅/🚨 상세 판정)
-- 📌 [2% 미만 구역 (순서 무관)]:
-  * 시안 내 순서:
-  * 판정: (Rule 34에 의거 섞여 있어도 합법이면 ✅적합 처리)
-
-## 5️⃣ [알레르기, 주의사항 교차 검증 (CS 클레임 방어 포함)]
-- 서류 기준, 박스와 팩의 '~함유' 알레르기 표시 완벽 일치 여부: (✅/🚨)
-- ⭐ [Rule 38] 교차오염 문구 적합성 (수학적 차집합 검증): 
-- ⭐ [Rule 74] 개봉 후 냉장보관 주의문구 점검:
-- ⭐ [Rule 75] CS 방어용 문구(침전물, 용기팽창) 점검:
-- ⭐ [Rule 7] 당알코올 주의문구 적합성 검증 (10% 이상일 때만 표시):
-
-## 🏛️ 6️⃣ [행정 정보 교차 검증 (제조원, 포장재질, 품목보고번호)]
-- ⭐ [Rule 20, 73] 포장재질 표시 적합성: (종이 박스에 폴리에틸렌 등 내포장 재질만 적혀있어도 완벽히 합법이므로 오판 금지. 단, 뚜껑 있는 팩인 경우 뚜껑: HDPE 등 세부 재질 누락 여부 점검)
-- ⭐ 제조원/유통전문판매원 및 품목보고번호 검증: 서류(마스터) 정보와 일치하는지, 오탈자는 없는지 점검하십시오. (단, 다포장 박스일 경우 낱팩과 복붙 에러가 없는지 교차 대조할 것)
-
-## 🔍 7️⃣ [전 구간 공통: 수량 모순 및 오탈자 검증]
-- ⭐ [Rule 68] 정보표시면 내용량 낱팩 복붙 스나이퍼: (주의: 영양성분표 파트는 3번 탭 AI가 검사하므로 넌 절대 찾지 마라! 넌 오직 정보표시면의 '내용량' 텍스트만 스캔해서 단독 표기(예: 125mL)인지 판정해!)
-- ⭐ 포장 단위(수량) 2-Track 검증:
-- ⭐ [Rule 69] 비타민 아래첨자 스나이퍼:
-- ⭐ 띄어쓰기 및 오탈자 적발: (글자 단위 1:1 대조. ⭐[전 구역 범용 띄어쓰기/오탈자 무관용 전수 검사 (AI 자동완성 영구 차단)]: 텍스트의 문맥을 파악하여 임의로 띄어쓰기를 교정해서 읽는 행위(뇌내 보정)를 영구적으로 차단합니다. 전체 텍스트를 한 글자씩 스캔하여, 한국어 맞춤법상 반드시 띄어 써야 하는 두 단어(명사와 명사 등)가 픽셀 상에서 공백 없이 붙어있다면, 단 하나도 빠짐없이 100% 모두 찾아내어 🚨부적합(띄어쓰기 오류)으로 나열하십시오. 적당히 몇 개만 찾고 얼버무리는 조기 종료나 똑같은 글자를 두고 오류라고 우기는 환각을 엄격히 금지합니다.)
-"""
-                    else:
-                        judgment_prompt = base_tab2_warning + """
-## 1️⃣ [원료 스펙 마스터 취합표 (개별 라벨 기반 자동 생성)]
-⭐ [마스터표 행(Row) 증발 절대 금지]: 업로드된 개별 원료 서류가 여러 개면, 이 표의 행(Row)도 반드시 서류 개수만큼 끝까지 전부 그려야 합니다! 기계 임의로 2~3개만 적고 "등", "중략" 처리하거나 출력을 끊어버리면 시스템이 붕괴됩니다. 첫 번째 원료부터 마지막 원료까지 100% 빠짐없이 표를 끝까지 그리십시오.
-| 매칭된 증빙 서류명 | 원료 제품명 | 식품유형 | 한글표시사항 (하위 전개 성분) | 원산지 | 알레르기 물질 |
-|---|---|---|---|---|---|
-| (서류명) | (제품명) | (유형) | (성분 전개) | (원산지) | (OO 함유 또는 해당 없음) |
-
-## 2️⃣ [마스터 서류 vs 시안 법적 교차 검증 (Rule 35 동의어/간략명 허용)]
-| 시안 표기 원재료명 (패키 나열 순서대로 100% 나열, 중략 금지) | 매칭된 위 마스터 표 원료명 | 원산지 산정 순위 | 대조 검증 (오탈자/순서/합법 간략화) | 판정 (상세 사유) |
-|---|---|---|---|---|
-| (시안 기준 100% 나열) | (서류 원료명) | (도출 사유) | (검증 결과) | (✅/🚨 판정 및 사유) |
-※ ⭐ [절대 원칙: 엑셀 VLOOKUP 하드 매핑 및 의미론적 맵핑 영구 차단]: 표를 작성할 때 단어의 의미나 카테고리(예: 가공유지=기름=MCT오일)를 유추하여 맵핑하는 '의미론적 추론'을 영구히 차단합니다. 당신의 배경지식을 절대 개입시키지 마십시오. 오직 제공된 [미션 B] 서류 데이터 전체(특히 프리믹스의 하위 성분 리스트 끝까지)를 대상으로 '텍스트(글자) 일치 여부'만 1순위로 샅샅이 뒤지십시오. 시안에 '가공유지'가 있다면, 서류 어딘가에 똑같이 '가공유지'라고 적힌 곳을 찾아 1:1 하드 맵핑(Hard-Mapping)해야 합니다.
-※ [법규 트랙]: 시안 명칭이 서류와 물리적으로 다르더라도, 표시기준 표5나 표6에 따른 합법적인 동의어/간략명(Rule 35)인 경우 ✅적합으로 판정하십시오. 단, 판정 란에 `🌟 [표5/6 치환 알림] 합법적 동의어/간략명 표기. 한번 더 확인해 보세요.` 라는 코멘트를 반드시 추가하십시오.
-
-### 🚨 [서류 기준 최종 누락 스나이퍼 검증]
-- 마스터 정답지에는 존재하지만 시안에서 통째로 누락된 원료/하위성분: (없으면 '누락 없음 ✅')
-
-## ⚖️ 3️⃣ [배합비 기반 2% 룰 및 전개 순서 정밀 검증 (Rule 34)]
-- ⭐ 배합비 유무: ([미션 C] 데이터 존재 여부 명시)
-- 📌 [2% 이상 구역 (순서 엄수)]:
-  * 시안 내 순서:
-  * 판정: (환산 수식 기반 ✅/🚨 상세 판정)
-- 📌 [2% 미만 구역 (순서 무관)]:
-  * 시안 내 순서:
-  * 판정: (Rule 34에 의거 섞여 있어도 합법이면 ✅적합 처리)
-
-## 4️⃣ [알레르기, 주의사항 교차 검증 (CS 클레임 방어 포함)]
-- 서류 기반 알레르기 정보 표시 적합성: (✅/🚨)
-- ⭐ [Rule 38] 교차오염 문구 적합성 (수학적 차집합 검증): 
-- ⭐ [Rule 74] 개봉 후 냉장보관 주의문구 점검:
-- ⭐ [Rule 75] CS 방어용 문구(침전물, 용기팽창) 점검:
-- ⭐ [Rule 7] 당알코올 주의문구 적합성 검증 (10% 이상일 때만 표시):
-
-## 🏛️ 5️⃣ [행정 정보 교차 검증 (제조원, 포장재질, 품목보고번호)]
-- ⭐ [Rule 73] 포장재질 세부 점검: (뚜껑 있는 팩인 경우 뚜껑: HDPE 등 세부 재질 누락 여부 점검)
-- ⭐ 제조원/유통전문판매원 및 품목보고번호 검증: 서류(마스터) 정보와 일치하는지, 오탈자는 없는지 점검하십시오.
-
-## 🔍 6️⃣ [전 구간 공통: 수량 모순 및 오탈자 검증]
-- ⭐ 포장 단위(수량) 2-Track 검증:
-- ⭐ [Rule 69] 비타민 아래첨자 스나이퍼:
-- ⭐ 띄어쓰기 및 오탈자 적발: (글자 단위 1:1 대조. ⭐[전 구역 범용 띄어쓰기/오탈자 무관용 전수 검사 (AI 자동완성 영구 차단)]: 텍스트의 문맥을 파악하여 임의로 띄어쓰기를 교정해서 읽는 행위(뇌내 보정)를 영구적으로 차단합니다. 전체 텍스트를 한 글자씩 스캔하여, 한국어 맞춤법상 반드시 띄어 써야 하는 두 단어(명사와 명사 등)가 픽셀 상에서 공백 없이 붙어있다면, 단 하나도 빠짐없이 100% 모두 찾아내어 🚨부적합(띄어쓰기 오류)으로 나열하십시오. 적당히 몇 개만 찾고 얼버무리는 조기 종료나 똑같은 글자를 두고 오류라고 우기는 환각을 엄격히 금지합니다.)
-"""
-                st.session_state["result_tab2"] = run_qc_3pass(RULES_TAB2, judgment_prompt, extract_mission)
+                st.session_state["result_tab2"] = run_qc_3pass(RULES_TAB2, judgment_prompt, missions)
         display_result(st.session_state["result_tab2"], "정보표시면")
 
     # ── TAB 3: 영양성분표 ──
     with tab3:
         if st.button("▶️ 영양성분표 오차 정밀 연산 시작", key="btn_nutri"):
-            with st.spinner("【3-Pass】 분석 진행 중..."):
-                extract_mission = """
-🎯 [미션 A: 영양성분표 데이터 표 추출 (내포장/외포장 분리 추출!!)]
-1. 시안 이미지 중 '영양정보' 표를 찾아 마크다운 표(성분명, 함량, %)로 추출하십시오.
-2. 영양정보표 바깥 하단이나 상단에 적힌 "총 내용량", "칼로리", "1일 영양성분 기준치에 대한..." 문구도 텍스트로 꼭 모두 추출하십시오.
-   - ⭐ 강력 지시: 검토 모드가 '선물세트 박스(외포장) 교차 검토'라면, 반드시 **[타겟(박스) 영양성분표]**와 **[비교용(팩) 영양성분표]**의 텍스트를 각각 별도로 분리하여 2세트를 추출하십시오! 둘 중 하나라도 누락하면 안 됩니다.
-
-[출력 필수 양식]
-=== [미션 A-1] 타겟(박스) 영양성분표 ===
-(마크다운 표 및 상/하단 문구 전체)
-=== [미션 A-2] 비교용(팩) 영양성분표 ===
-(마크다운 표 및 상/하단 문구 전체)
-
-🎯 [미션 B: 시험성적서(실측값) 파싱]
-- 업로드된 서류 중 '시험성적서' 실측값 데이터를 찾아 표로 정리하십시오.
-"""
-                base_tab3_warning = """
-⭐ [오차 검증 절대 규칙 (Rule 11 강제 적용 - 역산 절대 금지!)]:
-1. 비타민, 미네랄 등 하한선(80%) 그룹: 반드시 (실측값 >= 표시량의 80%) 인지 확인하십시오. 실측값이 표시량보다 월등히 높더라도 이것은 제조사의 보수적(안전빵) 표기이므로 법적으로 완벽한 ✅적합입니다! "표시량이 실측값의 80% 미만이다"라는 식으로 분모/분자를 뒤집어 역산하여 🚨부적합을 내리는 바보 같은 짓을 절대 금지합니다! 
-2. 단, 실측값이 표시량의 3배(300%)를 초과할 경우에만 `✅ 적합` 판정을 내리되 `⚠️ [실무 검토 권장]` 뱃지를 추가하십시오.
-3. 열량, 당류 등 상한선(120%) 그룹: (실측값 <= 표시량의 120%) 이면 ✅합법.
-
-⭐ [액체 비중(Specific Gravity) 고려 원칙 강제 발동]: 
-당알콜(예: 1.0g vs 1.06g)이나 탄수화물 등에서 성적서 단순 환산값과 시안 표시값이 소수점 수준으로 미세하게 달라도, 이는 액체의 비중(밀도)을 곱해서 나온 정상적인 실무 계산값이므로 절대 불일치(🚨)로 잡지 말고 무조건 일치(✅적합) 처리하십시오.
-
-⭐ [단위 환산 및 연산 강제 지시]: 
-성적서가 100mL(g) 기준이고 시안이 총 내용량(예: 125mL) 기준이라면, 반드시 100mL 실측값에 배수를 곱하여 '환산 실측값'을 구하십시오.
-기계적인 표 출력에 그치지 말고, '% 연산 검증' 컬럼에는 반드시 '시안 표시량 ÷ 1일기준치 × 100'을 직접 계산하여 그 결과값을 적어 넣으십시오!
-
-⭐ [절대 원칙: 엑셀 VLOOKUP 하드 매핑]: [미션 A-1]과 [미션 A-2]에 추출된 시안의 영양성분 수치와 [미션 B]의 성적서 수치를 표 매핑할 때, 귀찮아하거나 임의로 생략하지 마십시오! 반드시 추출된 텍스트의 모든 수치(나트륨, 탄수화물 등 전체)를 100% 그대로 기계적으로 복사해서 표의 각 빈칸을 채워 넣어야 합니다. 눈앞에 데이터가 있는데도 '데이터 없음'이라고 우기는 환각(Hallucination)과 근무 태만을 엄격히 금지합니다.
-"""
-                if inspection_mode == "선물세트 박스(외포장) 교차 검토":
-                    judgment_prompt = base_tab3_warning + """
+            with st.spinner("【분할 미션 스캔 중...】"):
+                missions = [
+                    "타겟(박스) 시안의 영양정보표 내부 수치와 표 바깥의 총 내용량, 칼로리, '1일 영양성분 기준치' 문구를 모두 추출하십시오.",
+                    "비교용(팩) 시안이 있다면 영양정보표 내부 수치와 바깥 문구를 모두 추출하십시오.",
+                    "시험성적서 서류에서 각 영양성분의 실측값 데이터를 추출하여 표로 정리하십시오."
+                ]
+                judgment_prompt = """
 ## 4️⃣ [영양표시 오차 검증 및 팩/박스 교차 대조]
-- 결론: (✅ 적합 또는 🚨 부적합) (법적 사유 상세 설명 포함)
-
-| 영양성분 | 성적서 환산값 | 비교용(팩) 시안 | 타겟(박스) 시안 | 팩 vs 박스 일치 여부 | 🎯 % 계산 검증 (표시량÷기준치×100) | 최종 판정 (상세 사유 필수) |
-|---|---|---|---|---|---|---|
-| (모든 영양성분을 축약 없이 100% 기재) | [내용 작성] | [내용 작성] | [내용 작성] | [내용 작성] | [내용 작성] | [내용 작성] |
-
-## 🔍 [영양성분표 치명적 오탈자 및 단위 스나이퍼 스캔]
-- ⭐ [Rule 66] 단위 오기재 스나이퍼: (반드시 Rule 66 정답지와 대조하여 g, mg, µg 등 단위 오타 정밀 스캔)
-- ⭐ [Rule 67] 하단 법정 문구 스나이퍼: (표 내부에만 갇혀있지 말고, 표 바깥에 추출된 텍스트/불릿 포인트를 반드시 스캔하여 "1일 영양성분 기준치에 대한 비율(%)은..." 문구가 있는지 확인할 것. 텍스트에 분명히 존재하는데 없다고 우기는 환각 절대 금지!)
-- ⭐ [Rule 68] 영양성분표 복붙 스나이퍼: (주의: 정보표시면 '내용량'은 2번 탭 AI가 검사하므로 넌 절대 찾지 마라! 넌 오직 영양성분표 상/하단 문구와 표 내부 열 제목만 샅샅이 스캔하여 낱팩 복붙 에러인지 강제 스캔할 것.)
+(환산값, 표시량, 80% 하한선 / 120% 상한선 검증 표 기재)
+## 🔍 [치명적 오탈자 및 단위 스나이퍼 스캔]
+- ⭐ [Rule 66] 단위 오기재 스나이퍼 (g, mg, µg 대조):
+- ⭐ [Rule 67] 하단 법정 문구 스나이퍼:
+- ⭐ [Rule 68] 영양성분표 복붙 스나이퍼 (총 내용량당 / 1개당 텍스트 강제 확인):
 - ⭐ [Rule 69] 비타민 아래첨자 스나이퍼:
-- 🔍 [전 구역 공통] 오탈자 및 띄어쓰기 정밀 스캔: (표 내 오타 여부. ⭐[전 구역 범용 띄어쓰기/오탈자 무관용 전수 검사 (AI 자동완성 영구 차단)]: 텍스트의 문맥을 파악하여 임의로 띄어쓰기를 교정해서 읽는 행위(뇌내 보정)를 영구적으로 차단합니다. 전체 텍스트를 한 글자씩 스캔하여, 한국어 맞춤법상 반드시 띄어 써야 하는 두 단어(명사와 명사 등)가 픽셀 상에서 공백 없이 붙어있다면, 단 하나도 빠짐없이 100% 모두 찾아내어 🚨부적합(띄어쓰기 오류)으로 나열하십시오. 적당히 몇 개만 찾고 얼버무리는 조기 종료나 똑같은 글자를 두고 오류라고 우기는 환각을 엄격히 금지합니다.)
+- ⭐ 띄어쓰기 및 오탈자 적발:
 """
-                else:
-                    judgment_prompt = base_tab3_warning + """
-## 4️⃣ [영양표시 및 % 기준치 검증]
-- 결론: (✅ 적합 또는 🚨 부적합) (법적 사유 상세 설명 포함)
-
-| 영양성분 | 성적서 환산값 | 시안 표시량 | 오차 검증(실측vs표시) | 시안 표시 % | 🎯 % 계산 검증 (표시량÷기준치×100) | 판정 (상세 사유 필수) |
-|---|---|---|---|---|---|---|
-| (모든 영양성분을 축약 없이 100% 기재) | [내용 작성] | [내용 작성] | [내용 작성] | [내용 작성] | [내용 작성] | [내용 작성] |
-
-## 🔍 [영양성분표 치명적 오탈자 및 단위 스나이퍼 스캔]
-- ⭐ [Rule 66] 단위 오기재 스나이퍼: (반드시 Rule 66 정답지와 대조하여 g, mg, µg 등 단위 오타 정밀 스캔)
-- ⭐ [Rule 67] 하단 법정 문구 스나이퍼: (표 내부에만 갇혀있지 말고, 표 바깥에 추출된 텍스트/불릿 포인트를 반드시 스캔하여 "1일 영양성분 기준치에 대한 비율(%)은..." 문구가 있는지 확인할 것. 텍스트에 분명히 존재하는데 없다고 우기는 환각 절대 금지!)
-- ⭐ [Rule 69] 비타민 아래첨자 스나이퍼:
-- 🔍 [전 구역 공통] 오탈자 및 띄어쓰기 정밀 스캔: (표 내 오타 여부. ⭐[전 구역 범용 띄어쓰기/오탈자 무관용 전수 검사 (AI 자동완성 영구 차단)]: 텍스트의 문맥을 파악하여 임의로 띄어쓰기를 교정해서 읽는 행위(뇌내 보정)를 영구적으로 차단합니다. 전체 텍스트를 한 글자씩 스캔하여, 한국어 맞춤법상 반드시 띄어 써야 하는 두 단어(명사와 명사 등)가 픽셀 상에서 공백 없이 붙어있다면, 단 하나도 빠짐없이 100% 모두 찾아내어 🚨부적합(띄어쓰기 오류)으로 나열하십시오. 적당히 몇 개만 찾고 얼버무리는 조기 종료나 똑같은 글자를 두고 오류라고 우기는 환각을 엄격히 금지합니다.)
-"""
-                st.session_state["result_tab3"] = run_qc_3pass(RULES_TAB3, judgment_prompt, extract_mission)
+                st.session_state["result_tab3"] = run_qc_3pass(RULES_TAB3, judgment_prompt, missions)
         display_result(st.session_state["result_tab3"], "영양성분표")
 
     # ── TAB 4: 기타면/측면 ──
     with tab4:
         if st.button("▶️ 기타면/측면 분석 시작", key="btn_extra"):
-            with st.spinner("【3-Pass】 분석 진행 중..."):
-                extract_mission = """
-🎯 [미션 A: 전 구역(4장 전체) 공통 의무표시 통합 스캔 (내포장/외포장 분리 추출!!)]
-- 당신은 패키지의 특정 면에 얽매이지 않는 '통합 스캐너'입니다. 업로드된 앞면, 뒷면, 영양정보, 기타면 시안 '전체'를 이 잡듯이 뒤져서 아래 항목들을 정확하게 추출하십시오.
-  1) 소비자 상담 번호 
-  2) 반품 및 교환 장소 (구입처 등)
-  3) "부정·불량식품 신고는 국번없이 1399" 문구
-  4) HACCP 인증 마크 및 텍스트
-  5) 분리배출 마크 텍스트 (해당 시. 단, 종이 박스/트레이는 분리배출 마크 생략이 합법이므로 누락을 지적하지 마십시오.)
-  6) 알레르기 교차오염 주의문구 및 CS 문구 (예: "...제조시설에서 제조", "개봉 후 냉장보관", "침전물", "용기 팽창" 등)
-  7) ⭐ [필수]: 직접 함유 알레르기 물질 표시 (예: "우유 함유", "대두, 밀 함유" 등 바탕색이 구분된 별도 박스 안의 텍스트). 특정 원료에 국한되지 않고 추출된 '모든' 직접 함유 알레르기를 차집합 연산에 범용적으로 사용합니다!
-  8) 포장재질 표기 (뚜껑 등 세부 재질 포함)
-  
-  - ⭐ 강력 지시: 검토 모드가 '선물세트 박스(외포장)'라면, 위 항목들을 **[타겟(박스) 시안]**과 **[비교용(팩) 시안]**에서 각각 별도로 분리하여 2세트를 완벽하게 추출하십시오! 둘 중 하나라도 누락하면 안 됩니다.
-"""
-                if inspection_mode == "선물세트 박스(외포장) 교차 검토":
-                    judgment_prompt = """
-## 5️⃣ [기타면/측면 표시사항 팩 vs 박스 교차 대조 및 마케팅 뱃지]
-- 결론: (✅ 적합 또는 🚨 부적합/확인요망) (법적 사유 명시)
-- ⭐ [Rule 59] 필수 의무표시 3종 누락 검증 (박스/팩 양쪽 확인):
-   1) 고객상담실 번호: (확인 여부 기재)
-   2) 반품 및 교환처: (확인 여부 기재)
-   3) 1399 부정/불량식품 신고 문구: (확인 여부 기재)
-   4) 판정: (하나라도 누락 시 🚨부적합 처리)
-- ⭐ [Rule 38] 알레르기 교차오염 문구 적합성 (수학적 차집합 검증 - 박스/팩 양쪽 확인):
-- ⭐ [Rule 56] HACCP 마크 텍스트 공식 명칭 적합성 (박스/팩 양쪽 확인):
-- ⭐ [Rule 63] 미드팩 190mL 기타면 내 '질소충전' 표기 누락 점검:
-- ⭐ [Rule 73] 테트라팩/프리즈마 용기 세부 재질 스나이퍼: 
-- ⭐ [Rule 74] 액상 음료 '개봉 후 주의문구' 강제 스캔:
-- ⭐ [Rule 75] CS 클레임 방어용 필수 주의문구 세트 점검:
-- 팩(내포장) 기타면 vs 박스(외포장) 기타면 교차 대조 특이사항: (분리배출 마크 등 누락이나 모순 여부. 단, 종이 박스/트레이에 분리배출 마크가 누락된 것은 완벽한 합법이므로 지적하지 마십시오.)
-- ⭐ [Rule 64] 원물 기만표시(99.9% 등) 스나이퍼 스캔:
-- ⭐ [Rule 52] 영양강조 컷오프 정밀 타겟팅: (강조된 영양소 명칭이 단백질인지, 식이섬유인지, 비타민인지 파악하고 Rule 52에 명시된 100kcal당 환산 등 '4대 조건'을 모두 대입하여 하나라도 통과하는지 강제 검증할 것)
-- ⭐ [Rule 24] 당류 강조표시(무당/저당/무가당/설탕무첨가) 적합성 검증:
-   (※ 아래 1, 2, 3번 항목을 각각 분리하여 꼼꼼하게 검증 및 보고할 것)
-   1) 감미료 문구 위치: (주의: '저당' 단독 강조면 해당없음(✅) 처리할 것. 무당/무가당 강조 시에만 알룰로스 등 식품원료를 제외하고 감미료 함유 문구 누락 여부 판정)
-   2) 열량 병기 위치: '무가당/저당/설탕무첨가' 문구와 '총 열량(kcal)' 수치가 모두 스캔되었다면, 기계는 1차적으로 '✅ 텍스트 표기 적합'으로 판정하십시오. ⭐ 단, 반드시 그 옆에 '(⚠️ 육안 거리 확인 요망: 식약처 규정상 두 문구는 소비자가 한눈에 볼 수 있도록 물리적으로 인접해 있어야 합니다. 원본 시안에서 두 글자가 멀리 떨어져 있지 않은지 실무자가 눈으로 최종 확인하십시오.)'라는 꼬리말을 강제로 붙이십시오. 열량 수치가 아예 없다면 🚨 부적합 처리하십시오.
-   3) 당류 함량 확인: ('저당'의 경우 100mL당 2.5g 미만 컷오프를 충족하는지 뒷면 데이터로 강제 교차 확인하여 판정)
-- 기타 특이사항:
-
-## 🔍 [전 구간 공통: 수량 모순 및 오탈자 검증]
-- ⭐ 포장 단위(수량) 2-Track 검증:
-- ⭐ [Rule 69] 비타민 아래첨자 스나이퍼:
-- ⭐ 띄어쓰기 및 오탈자 적발: (글자 단위 1:1 대조. ⭐[전 구역 범용 띄어쓰기/오탈자 무관용 전수 검사 (AI 자동완성 영구 차단)]: 텍스트의 문맥을 파악하여 임의로 띄어쓰기를 교정해서 읽는 행위(뇌내 보정)를 영구적으로 차단합니다. 전체 텍스트를 한 글자씩 스캔하여, 한국어 맞춤법상 반드시 띄어 써야 하는 두 단어(명사와 명사 등)가 픽셀 상에서 공백 없이 붙어있다면, 단 하나도 빠짐없이 100% 모두 찾아내어 🚨부적합(띄어쓰기 오류)으로 나열하십시오. 적당히 몇 개만 찾고 얼버무리는 조기 종료나 똑같은 글자를 두고 오류라고 우기는 환각을 엄격히 금지합니다.)
-"""
-                else:
-                    judgment_prompt = """
+            with st.spinner("【분할 미션 스캔 중...】"):
+                missions = [
+                    "전 구역 이미지를 스캔하여 필수 의무표시 3종(상담번호, 교환처, 1399 문구)과 HACCP 인증 마크 텍스트를 추출하십시오. (박스/팩 분리)",
+                    "알레르기 직접 함유 표시(바탕색 별도 박스) 및 분리배출 마크 텍스트를 추출하십시오.",
+                    "포장재질 표기(뚜껑, 본체 등 세부 재질 포함) 및 CS 방어 주의문구를 모두 추출하십시오."
+                ]
+                judgment_prompt = """
 ## 5️⃣ [기타면/측면 표시사항 및 마케팅 뱃지 (HACCP 포함)]
-- 결론: (✅ 적합 또는 🚨 부적합/확인요망) (법적 사유 명시)
 - ⭐ [Rule 59] 필수 의무표시 3종 누락 검증:
-   1) 고객상담실 번호: (확인 여부 기재)
-   2) 반품 및 교환처: (확인 여부 기재)
-   3) 1399 부정/불량식품 신고 문구: (확인 여부 기재)
-   4) 판정: (하나라도 누락 시 🚨부적합 처리)
-- ⭐ [Rule 38] 알레르기 교차오염 문구 적합성 (수학적 차집합 검증):
-- ⭐ [Rule 56] HACCP 마크 텍스트 공식 명칭 적합성:
-- ⭐ [Rule 63] 미드팩 190mL 기타면 내 '질소충전' 표기 누락 점검:
-- ⭐ [Rule 73] 테트라팩/프리즈마 용기 세부 재질 스나이퍼: 
-- ⭐ [Rule 74] 액상 음료 '개봉 후 주의문구' 강제 스캔:
-- ⭐ [Rule 75] CS 클레임 방어용 필수 주의문구 세트 점검:
-- ⭐ [Rule 64] 원물 기만표시(99.9% 등) 스나이퍼 스캔:
-- ⭐ [Rule 52] 영양강조 컷오프 정밀 타겟팅: (강조된 영양소 명칭이 단백질인지, 식이섬유인지, 비타민인지 파악하고 Rule 52에 명시된 100kcal당 환산 등 '4대 조건'을 모두 대입하여 하나라도 통과하는지 강제 검증할 것)
-- ⭐ [Rule 24] 당류 강조표시(무당/저당/무가당/설탕무첨가) 적합성 검증:
-   (※ 아래 1, 2, 3번 항목을 각각 분리하여 꼼꼼하게 검증 및 보고할 것)
-   1) 감미료 문구 위치: (주의: '저당' 단독 강조면 해당없음(✅) 처리할 것. 무당/무가당 강조 시에만 알룰로스 등 식품원료를 제외하고 감미료 함유 문구 누락 여부 판정)
-   2) 열량 병기 위치: '무가당/저당/설탕무첨가' 문구와 '총 열량(kcal)' 수치가 모두 스캔되었다면, 기계는 1차적으로 '✅ 텍스트 표기 적합'으로 판정하십시오. ⭐ 단, 반드시 그 옆에 '(⚠️ 육안 거리 확인 요망: 식약처 규정상 두 문구는 소비자가 한눈에 볼 수 있도록 물리적으로 인접해 있어야 합니다. 원본 시안에서 두 글자가 멀리 떨어져 있지 않은지 실무자가 눈으로 최종 확인하십시오.)'라는 꼬리말을 강제로 붙이십시오. 열량 수치가 아예 없다면 🚨 부적합 처리하십시오.
-   3) 당류 함량 확인: ('저당'의 경우 100mL당 2.5g 미만 컷오프를 충족하는지 뒷면 데이터로 강제 교차 확인하여 판정)
-- 제품명/원료 함량 강조 적합성:
-- 기타 특이사항:
-
+- ⭐ [Rule 38] 알레르기 교차오염 수학적 차집합 검증:
+- ⭐ [Rule 56] HACCP 마크 공식 명칭 적합성:
+- ⭐ [Rule 63] 미드팩 190mL 질소충전 점검:
+- ⭐ [Rule 73] 용기 세부 재질 스나이퍼:
+- ⭐ [Rule 74] 액상 음료 개봉 후 주의문구:
+- ⭐ [Rule 75] CS 클레임 방어용 문구 점검:
+- ⭐ [Rule 24, 52] 영양강조 및 당류 컷오프 교차 확인:
 ## 🔍 [전 구간 공통: 수량 모순 및 오탈자 검증]
-- ⭐ 포장 단위(수량) 2-Track 검증:
-- ⭐ [Rule 69] 비타민 아래첨자 스나이퍼:
-- ⭐ 띄어쓰기 및 오탈자 적발: (글자 단위 1:1 대조. ⭐[전 구역 범용 띄어쓰기/오탈자 무관용 전수 검사 (AI 자동완성 영구 차단)]: 텍스트의 문맥을 파악하여 임의로 띄어쓰기를 교정해서 읽는 행위(뇌내 보정)를 영구적으로 차단합니다. 전체 텍스트를 한 글자씩 스캔하여, 한국어 맞춤법상 반드시 띄어 써야 하는 두 단어(명사와 명사 등)가 픽셀 상에서 공백 없이 붙어있다면, 단 하나도 빠짐없이 100% 모두 찾아내어 🚨부적합(띄어쓰기 오류)으로 나열하십시오. 적당히 몇 개만 찾고 얼버무리는 조기 종료나 똑같은 글자를 두고 오류라고 우기는 환각을 엄격히 금지합니다.)
+- ⭐ 오탈자 및 띄어쓰기 적발:
 """
-                st.session_state["result_tab4"] = run_qc_3pass(RULES_TAB4, judgment_prompt, extract_mission)
+                st.session_state["result_tab4"] = run_qc_3pass(RULES_TAB4, judgment_prompt, missions)
         display_result(st.session_state["result_tab4"], "기타면/측면")
 
     # ── TAB 5: 종합 보고서 ──
     with tab5:
         if st.button("▶️ 최종 종합 리포트 생성", key="btn_summary"):
-            if not any([st.session_state["result_tab1"], st.session_state["result_tab2"],
-                        st.session_state["result_tab3"], st.session_state["result_tab4"]]):
+            if not any([st.session_state["result_tab1"], st.session_state["result_tab2"], st.session_state["result_tab3"], st.session_state["result_tab4"]]):
                 st.warning("🚨 앞의 1~4번 탭 중에서 최소 1개 이상을 먼저 분석해 주십시오!")
             else:
-                with st.spinner("모든 분석 데이터를 병합하여 최종 수정 지시서를 작성 중입니다..."):
+                with st.spinner("최종 수정 지시서를 작성 중입니다..."):
                     def strip_logs(result):
                         if not result: return "분석 안 함"
                         result = re.sub(r'<pass1_log>.*?</pass1_log>', '', result, flags=re.DOTALL)
                         result = re.sub(r'<pass15_log>.*?</pass15_log>', '', result, flags=re.DOTALL)
-                        result = re.sub(r'<thinking>.*?</thinking>', '', result, flags=re.DOTALL)
                         return result.strip()
 
                     combined_results = f"""
@@ -1214,19 +823,13 @@ def main():
 [4번 탭 결과]: {strip_logs(st.session_state.get('result_tab4'))}
 """
                     summary_prompt = f"""
-[지시]: 지금까지 사용자가 각 탭에서 검토한 내용들을 모았습니다. 실무자가 한눈에 보고 패키지를 수정할 수 있도록 종합 결론을 내려주십시오.
-
-[기존 분석 데이터]
-{combined_results}
-
+[지시]: 실무자가 한눈에 보고 패키지를 수정할 수 있도록 종합 결론을 내려주십시오.
+[기존 분석 데이터]\n{combined_results}
 ## 📋 [최종 종합 검토 리포트]
 - **최종 판정:** (✅ 수정 없이 진행 가능 또는 🚨 즉시 수정 필요)
-
 ### 📌 [핵심 지적 사항 및 수정 지시]
-(위 분석 데이터에서 '부적합(🚨)' 또는 '확인요망'이 나온 내용들만 뽑아서 번호 순 불릿 포인트로 요약하십시오. 법적 사유가 적혀있다면 그 사유도 반드시 요약하여 포함하십시오.)
-
+(위 분석 데이터에서 '부적합(🚨)' 또는 '확인요망' 내용 요약)
 ### 🔍 [기타 주의사항]
-(실무자가 참고해야 할 관련 룰북 코멘트를 덧붙이십시오.)
 """
                     st.session_state["result_summary"] = run_qc_model(summary_prompt)
 
@@ -1238,7 +841,7 @@ def main():
                     <button onclick='setTimeout(function(){ window.print(); }, 100);' style='background-color: #FF4B4B; color: white; border: none; padding: 12px 24px; border-radius: 6px; font-weight: bold; font-size: 16px; cursor: pointer; box-shadow: 0 4px 6px rgba(0,0,0,0.1);'>
                         🖨️ 종합 보고서 전용 인쇄
                     </button>
-                    <p style='font-size: 12px; color: gray; margin-top: 8px;'>※ 단축키(Ctrl+P 또는 Cmd+P)를 누르셔도 스크롤 잘림 없이 전체 페이지가 인쇄됩니다.</p>
+                    <p style='font-size: 12px; color: gray; margin-top: 8px;'>※ 단축키(Ctrl+P)를 누르셔도 스크롤 잘림 없이 인쇄됩니다.</p>
                 </div>
             """, unsafe_allow_html=True)
 
