@@ -6,7 +6,6 @@ import streamlit as st
 st.set_page_config(page_title="식품 QC 마스터", page_icon="🏭", layout="wide")
 
 import google.generativeai as genai
-from PIL import Image
 import glob
 import time
 import os
@@ -74,14 +73,14 @@ SYSTEM_PROMPT = """당신은 대한민국 최고의 '식품 표시사항 법규 
 모든 검토 결과의 결론 앞에는 반드시 ✅(적합) 또는 🚨(부적합) 또는 🚨(확인 요망) 또는 ⚠️(실무 검토 권장) 이모지를 붙이십시오."""
 
 # ==========================================
-# 📚 3. 75대 룰북 원문 (Rule 29, 35 완벽 개정판)
+# 📚 3. 75대 룰북 원문 
 # ==========================================
 RULE_BOOK_FULL = """
 # [식품 패키지 표시사항 QC 자동화 검수 시스템 룰북]
 
 ## ⭐ [⚖️ 1일 영양성분 기준치 (식약처 고시 별표5 완벽 마스터)] ⭐
-오직 아래 명시된 한국 식약처 기준치만 대입하여 %를 산출해야 합니다. (기계 임의의 기준 적용 절대 금지)
-- [다량영양소]: 열량 2000kcal, 탄수화물 324g, 당류 100g, 단백질 55g, 지방 54g, 포화지방 15g, 트랜스지방(기준치 없음, %표기 불가), 콜레스테롤 300mg, 나트륨 2000mg
+오직 아래 명시된 한국 식약처 기준치만 대입하여 %를 산출해야 합니다.
+- [다량영양소]: 열량 2000kcal, 탄수화물 324g, 당류 100g, 단백질 55g, 지방 54g, 포화지방 15g, 트랜스지방(기준치 없음), 콜레스테롤 300mg, 나트륨 2000mg
 - [비타민류]: 비타민A 700ugRE, 비타민B1 1.2mg, 비타민B2 1.4mg, 나이아신 15mgNE, 판토텐산 5mg, 비타민B6 1.5mg, 비오틴 30ug, 엽산 400ugDFE, 비타민B12 2.4ug, 비타민C 100mg, 비타민D 10ug, 비타민E 11mga-TE, 비타민K 70ug
 - [필수지방산]: 알파-리놀렌산 1.3g, 리놀레산 10g, EPA와 DHA의 합 330mg
 - [무기질(미네랄)]: 칼슘 700mg, 인 700mg, 칼륨 3500mg, 철(철분) 12mg, 마그네슘 315mg, 아연 8.5mg, 요오드 150ug, 구리 0.8mg, 망간 3mg, 셀레늄 55ug, 몰리브덴 25ug, 크롬 30ug
@@ -527,14 +526,14 @@ def main():
 
             def process(f, label):
                 user_content.append(f"### [{label}] ###")
-                if f.type.startswith("image"):
-                    user_content.append(Image.open(f))
-                else:
-                    with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
-                        tmp.write(f.getbuffer())
-                        safe_temp_path = tmp.name
-                    user_content.append(robust_upload(safe_temp_path))
-                    os.remove(safe_temp_path)
+                ext = os.path.splitext(f.name)[1]
+                if not ext:
+                    ext = ".png"
+                with tempfile.NamedTemporaryFile(delete=False, suffix=ext) as tmp:
+                    tmp.write(f.getbuffer())
+                    safe_temp_path = tmp.name
+                user_content.append(robust_upload(safe_temp_path))
+                os.remove(safe_temp_path)
 
             # 시안 이미지 처리
             if img_main: process(img_main, "타겟_시안_주표시면")
@@ -635,10 +634,16 @@ def main():
         # ── PASS 2: 판정 ──
         docs_only = []
         for i, item in enumerate(content):
-            if not isinstance(item, Image.Image) and not isinstance(item, str):
+            if hasattr(item, "mime_type") and item.mime_type.startswith("application/pdf"):
                 if i > 0 and isinstance(content[i-1], str):
                     docs_only.append(content[i-1]) 
                 docs_only.append(item) 
+            elif isinstance(item, str):
+                pass # labels are handled by the i-1 check
+
+        # File API 적용 후 이미지 필터링을 위해 전체 content를 사용 (단독 이미지 판단 방지 위해)
+        # 패스 2는 추출 텍스트에만 의존하도록 프롬프트로 강제함.
+        docs_only = content 
 
         pass2_context = ""
         if extract_mission:
