@@ -217,9 +217,9 @@ RULE_BOOK_FULL = """
 ✅ **Rule 27. [제한 영양성분 100kcal 적용 금지]**
    - 열량, 당류 등은 100kcal 당 조건을 적용 금지.
 
-🔥 **Rule 28. [원산지 3순위 완벽 필터링 및 강제 재정렬 룰]**
-   - 정제수, 당류, 첨가물, **유산균, 효모, 미생물류는 원산지 산정에서 100% 강제 삭제**하십시오.
-   - 남은 '진짜 농수산물' 원료만으로 1, 2, 3순위를 재정렬하십시오.
+🔥 **Rule 28. [자사 규정 맞춤형 원산지 예외 4대장 룰]**
+   - 오직 **물(정제수), 주정, 식품첨가물, 당류가공품** 이 4가지에 속하는 원료만 원산지 산정에서 강제 삭제하십시오.
+   - 위 4가지에 해당하지 않는 나머지 모든 원료(유산균, 미생물, 기타가공품 등)는 반드시 원산지를 묻고 따져야 합니다.
 
 🔥 **Rule 29. [국내 가공 복합원재료 원산지 역추적 합법성]**
    - 하위 원물 원산지를 역추적해 표기했다면 합법(✅).
@@ -241,7 +241,7 @@ RULE_BOOK_FULL = """
 
 🔥 **Rule 35. [🌟 범용 간략명/동의어 허용 및 N종 묶음 절대 금지]**
    - 식약처 이명, 표 5 간략명, 내부 코드 생략은 완벽 합법.
-   - 단, 일반 원료를 '비타민 3종' 등으로 숫자로 묶는 단축 표기는 🚨부적합.
+   - 혼합제제 괄호 내부를 '산도조절제 2종' 등으로 숫자로 묶어 은폐(블랙박스화)하는 것은 명백한 위법(🚨부적합).
 
 ✅ **Rule 36. [주의사항 오탈자 스캔]**
    - 오탈자 정밀 검수.
@@ -375,6 +375,9 @@ RULE_BOOK_FULL = """
 
 🔥 **Rule 82. [영양소 법정 단위 엄격 검증]**
    - 비타민A: `μg RE` / 비타민D, B12, 엽산 등: `μg` / 비타민E: `mg α-TE` / 비타민C, B1 등: `mg`. (특수기호 100% 대조)
+
+🔥 **Rule 83. [영양성분 % 병기 강제 범용 스나이퍼]**
+   - 영양정보표에 기재된 모든 영양성분을 전수 검사하십시오. 1일 영양성분 기준치(식약처 고시 별표5)에 존재하는 성분(식이섬유, 비타민, 미네랄 등)이라면 반드시 그 수치 옆에 비율(%)이 병기되어 있어야 합니다. 누락 시 🚨부적합 처리하십시오. (단, 열량, 트랜스지방, 기준치가 없는 알룰로오스 등은 예외)
 """
 
 def get_sliced_rules(rule_numbers):
@@ -405,7 +408,7 @@ def get_sliced_rules(rule_numbers):
 COMMON_RULES = [36, 37, 42, 43, 45, 47, 70, 78, 79]
 RULES_TAB1 = "[탭1 주표시면 관련 핵심 룰]\n" + get_sliced_rules([3, 9, 10, 15, 16, 17, 18, 19, 21, 24, 28, 40, 46, 47, 50, 51, 52, 53, 57, 58, 59, 60, 62, 63, 64, 68, 71, 72] + COMMON_RULES)
 RULES_TAB2 = "[탭2 정보표시면/원재료명 관련 핵심 룰]\n" + get_sliced_rules([1, 2, 5, 6, 7, 8, 12, 13, 14, 20, 25, 28, 29, 30, 34, 35, 38, 39, 44, 48, 52, 54, 57, 58, 59, 60, 61, 65, 68, 70, 73, 74, 75, 76, 77] + COMMON_RULES)
-RULES_TAB3 = "[탭3 영양성분표 관련 핵심 룰]\n" + get_sliced_rules([3, 4, 6, 10, 11, 21, 23, 25, 26, 27, 31, 32, 33, 40, 41, 52, 55, 59, 68, 80, 81, 82] + COMMON_RULES)
+RULES_TAB3 = "[탭3 영양성분표 관련 핵심 룰]\n" + get_sliced_rules([3, 4, 6, 10, 11, 21, 23, 25, 26, 27, 31, 32, 33, 40, 41, 52, 55, 59, 68, 80, 81, 82, 83] + COMMON_RULES)
 RULES_TAB4 = "[탭4 기타면/측면 관련 핵심 룰]\n" + get_sliced_rules([7, 15, 17, 18, 20, 22, 24, 38, 52, 56, 57, 59, 63, 64, 73, 74, 75, 77] + COMMON_RULES)
 
 # ==========================================
@@ -435,7 +438,7 @@ def main():
     </style>
     """
     st.markdown(print_css, unsafe_allow_html=True)
-    st.title("🏭 식품 표시사항 정밀 검토 시스템 (V310.9 - 영양공학 마스터본)")
+    st.title("🏭 식품 표시사항 정밀 검토 시스템 (V310.9 - 방어구축 마스터본)")
     st.markdown("<hr class='hide-on-print'>", unsafe_allow_html=True)
 
     with st.sidebar:
@@ -548,7 +551,7 @@ def main():
                 st.success("✅ 파일 등록 완료! 이제 우측 탭에서 검토를 시작하세요.")
 
     # ==========================================
-    # 🔥 3-Pass 파이프라인
+    # 🔥 3-Pass 파이프라인 (504 철통 방어 패치)
     # ==========================================
     def run_qc_3pass(tab_rules: str, judgment_prompt: str, extract_missions_list: list = None):
         if not st.session_state["uploaded_content"]:
@@ -570,6 +573,9 @@ def main():
         
         extracted_text_combined = ""
 
+        # ==================================
+        # Pass 1: 분할 추출 미션 (504 방어)
+        # ==================================
         if extract_missions_list:
             extracted_results = []
             for i, mission in enumerate(extract_missions_list):
@@ -586,14 +592,30 @@ def main():
 🎯 [현재 타겟 미션]:
 {mission}
 """
-                try:
-                    pass1_response = model.generate_content(content + [pass1_prompt], generation_config=generation_config, safety_settings=safety_settings, request_options={"timeout": 600})
-                    extracted_results.append(f"=== [미션 {i+1} 결과] ===\n" + pass1_response.text)
-                except Exception as e:
-                    return f"🚨 Pass 1 (단일 추출 {i+1}) 오류 발생: {e}"
+                max_retries = 3
+                for attempt in range(max_retries):
+                    try:
+                        pass1_response = model.generate_content(
+                            content + [pass1_prompt], 
+                            generation_config=generation_config, 
+                            safety_settings=safety_settings, 
+                            request_options={"timeout": 600}
+                        )
+                        extracted_results.append(f"=== [미션 {i+1} 결과] ===\n" + pass1_response.text)
+                        break
+                    except Exception as e:
+                        if "504" in str(e) or "Deadline" in str(e) or "503" in str(e):
+                            if attempt < max_retries - 1:
+                                st.toast(f"⚠️ Pass 1 서버 지연. 재시도 중... ({attempt+1}/{max_retries})")
+                                time.sleep(10)
+                                continue
+                        return f"🚨 Pass 1 (단일 추출 {i+1}) 오류 발생: {e}"
             
             extracted_text_combined = "\n\n".join(extracted_results)
 
+            # ==================================
+            # Pass 1.5: 자체 검증 (504 방어)
+            # ==================================
             pass15_prompt = f"""
 [PASS 1.5 - 추출 텍스트 종합 자체검증 명령]
 ⭐ 당신은 '매의 눈 검수관'입니다. 아래 수집된 분할 미션 결과들을 검열하십시오.
@@ -606,12 +628,28 @@ def main():
 2. ⭐ [오타/환각 원천 차단]: 글자를 유추하거나 변경하지 마십시오.
 3. ⭐ [XML 괄호 보존]: 표나 태그 형태를 유지하십시오.
 """
-            try:
-                pass15_response = model.generate_content(content + [pass15_prompt], generation_config=generation_config, safety_settings=safety_settings, request_options={"timeout": 600})
-                verified_text = pass15_response.text
-            except Exception as e:
-                verified_text = extracted_text_combined
+            verified_text = extracted_text_combined # Default
+            for attempt in range(max_retries):
+                try:
+                    pass15_response = model.generate_content(
+                        content + [pass15_prompt], 
+                        generation_config=generation_config, 
+                        safety_settings=safety_settings, 
+                        request_options={"timeout": 600}
+                    )
+                    verified_text = pass15_response.text
+                    break
+                except Exception as e:
+                    if "504" in str(e) or "Deadline" in str(e) or "503" in str(e):
+                        if attempt < max_retries - 1:
+                            st.toast(f"⚠️ Pass 1.5 서버 지연. 재시도 중... ({attempt+1}/{max_retries})")
+                            time.sleep(10)
+                            continue
+                    break # 에러 시 검증 생략하고 Pass 1 텍스트 그대로 사용
 
+        # ==================================
+        # Pass 2: 룰 판정 명령 (504 방어)
+        # ==================================
         pass2_context = ""
         if extract_missions_list:
             pass2_context = f"""
@@ -640,19 +678,30 @@ def main():
 
 {judgment_prompt}
 """
-        try:
-            pass2_response = model.generate_content(content + [pass2_prompt], generation_config=generation_config, safety_settings=safety_settings, request_options={"timeout": 600})
-            if extract_missions_list:
-                final_output = (
-                    f"<pass1_log>\n{extracted_text_combined}\n</pass1_log>\n"
-                    f"<pass15_log>\n{verified_text}\n</pass15_log>\n"
-                    f"{pass2_response.text}"
+        for attempt in range(3):
+            try:
+                pass2_response = model.generate_content(
+                    content + [pass2_prompt], 
+                    generation_config=generation_config, 
+                    safety_settings=safety_settings, 
+                    request_options={"timeout": 600}
                 )
-            else:
-                final_output = pass2_response.text
-            return fix_markdown_table(final_output)
-        except Exception as e:
-            return f"🚨 Pass 2 (룰 판정) 오류 발생: {e}"
+                if extract_missions_list:
+                    final_output = (
+                        f"<pass1_log>\n{extracted_text_combined}\n</pass1_log>\n"
+                        f"<pass15_log>\n{verified_text}\n</pass15_log>\n"
+                        f"{pass2_response.text}"
+                    )
+                else:
+                    final_output = pass2_response.text
+                return fix_markdown_table(final_output)
+            except Exception as e:
+                if "504" in str(e) or "Deadline" in str(e) or "503" in str(e):
+                    if attempt < 2:
+                        st.toast(f"⚠️ Pass 2 서버 지연. 재시도 중... ({attempt+1}/3)")
+                        time.sleep(10)
+                        continue
+                return f"🚨 Pass 2 (룰 판정) 오류 발생: {e}"
 
     def run_qc_model(prompt_text):
         if not st.session_state["uploaded_content"]:
@@ -758,7 +807,7 @@ def main():
 
 ## 2️⃣ [마스터 서류 vs 시안 법적 대조 매트릭스]
 ⭐ [강제 지시 1: 시안 기준 Left Join]: 표의 뼈대는 무조건 '시안'에 적힌 원재료명 순서 그대로 100% 나열하십시오. 서류가 없다고 행을 삭제하면 시스템 파괴로 간주합니다.
-⭐ [강제 지시 2: 원산지 꼬리표 부착]: 대조 검증 결과란 첫머리에는 반드시 굵은 글씨로 **[원산지 1순위]**, **[원산지 2순위]**, **[원산지 3순위]** 또는 **[원산지 산정 제외(Rule 28: 물/당류/첨가물 등)]** 꼬리표를 달아주십시오.
+⭐ [강제 지시 2: 원산지 꼬리표 부착]: 대조 검증 결과란 첫머리에는 반드시 굵은 글씨로 **[원산지 1순위]**, **[원산지 2순위]**, **[원산지 3순위]** 또는 **[원산지 산정 제외]** 꼬리표를 달아주십시오.
 ⭐ [강제 지시 3: 서류 미제출 무지성 합격 금지]: 매칭된 서류가 '제출 안 됨'일 경우, 해당 원료가 기초 범용 원료(정제수, 설탕, 소금 등)가 아니라면 시안이 일치하더라도 절대 ✅적합을 주지 마십시오. 반드시 **⚠️ 확인 요망 (서류 미제출: 한글라벨 확인 필요)** 판정을 내리십시오.
 | 시안 표기 원재료명 (100% 나열) | 매칭된 서류 원료명 (없으면 '제출 안 됨') | 대조 검증 결과 (원산지 꼬리표 필수) | 최종 판정 |
 |---|---|---|---|
@@ -792,7 +841,7 @@ def main():
 
 ## 2️⃣ [통합 마스터 대조 매트릭스]
 ⭐ [강제 지시 1: 박스 기준 Left Join]: 표의 뼈대는 무조건 '📦 타겟(박스) 시안'에 적힌 원재료명 순서 그대로 100% 나열하십시오. 서류가 없다고 행을 삭제하면 시스템 파괴로 간주합니다.
-⭐ [강제 지시 2: 원산지 꼬리표 부착]: 대조 검증 결과란 첫머리에는 반드시 굵은 글씨로 **[원산지 1순위]**, **[원산지 2순위]**, **[원산지 3순위]** 또는 **[원산지 산정 제외(Rule 28: 물/당류/첨가물 등)]** 꼬리표를 달아주십시오.
+⭐ [강제 지시 2: 원산지 꼬리표 부착]: 대조 검증 결과란 첫머리에는 반드시 굵은 글씨로 **[원산지 1순위]**, **[원산지 2순위]**, **[원산지 3순위]** 또는 **[원산지 산정 제외]** 꼬리표를 달아주십시오.
 ⭐ [강제 지시 3: 서류 미제출 무지성 합격 금지]: 매칭된 서류가 '제출 안 됨'일 경우, 해당 원료가 기초 범용 원료(정제수, 설탕, 소금 등)가 아니라면 시안끼리 일치하더라도 절대 ✅적합을 주지 마십시오. 반드시 **⚠️ 확인 요망 (서류 미제출: 한글라벨 확인 필요)** 판정을 내리십시오.
 | 📦 타겟(박스) 시안 표기 (100% 나열) | 🧃 비교용(팩) 시안 표기 | 매칭된 증빙 서류 (없으면 '제출 안 됨') | 대조 검증 결과 및 사유 (원산지 꼬리표 필수, 일치 여부 포함) | 최종 판정 |
 |---|---|---|---|---|
@@ -847,6 +896,7 @@ def main():
 - ⭐ [Rule 80] 박스 포장 상단 레이아웃 확인 (`총 내용량... (X개입)` 및 `1개당` 기재 여부): 
 - ⭐ [Rule 81] 하단 2000kcal 면책 문구 토씨 100% 대조: 
 - ⭐ [Rule 82] 영양소 법정 특수 단위/아래첨자 정밀 검증 (μg, α-TE 등): 
+- ⭐ [Rule 83] 기준치 존재 성분 % 병기 룰 대조:
 
 ## 🔍 [오탈자 및 띄어쓰기 극단적 픽셀 대조]
 - ⭐ 의미 추론 영구 정지: 기계적인 맞춤법 자동 교정 기능을 끄고, A 시안과 B 시안(또는 원본)의 스페이스바(공백) 개수와 위치까지 'Byte 대 Byte'로 대조하십시오. 단 하나의 공백 위치라도 다르면 즉시 🚨부적합 처리하십시오.
@@ -863,6 +913,7 @@ def main():
 - ⭐ [Rule 80] 박스 포장 상단 레이아웃 확인 (`총 내용량... (X개입)` 및 `1개당` 기재 여부): 
 - ⭐ [Rule 81] 하단 2000kcal 면책 문구 토씨 100% 대조: 
 - ⭐ [Rule 82] 영양소 법정 특수 단위/아래첨자 정밀 검증 (μg, α-TE 등): 
+- ⭐ [Rule 83] 기준치 존재 성분 % 병기 룰 대조:
 - ⭐ [Rule 68] 영양성분표 복붙 스나이퍼: 
 
 ## 🔍 [오탈자 및 띄어쓰기 극단적 픽셀 대조]
