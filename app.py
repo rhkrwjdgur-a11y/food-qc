@@ -125,7 +125,7 @@ SYSTEM_PROMPT = f"""당신은 대한민국 최고의 '식품 표시사항 법규
 모든 검토 결과의 결론 앞에는 반드시 ✅(적합) 또는 🚨(부적합) 또는 🚨(확인 요망) 또는 ⚠️(실무 검토 권장) 이모지를 붙이십시오."""
 
 # ==========================================
-# 📚 3. 90대 마스터 룰북 원문 (V311.62 완결판)
+# 📚 3. 90대 마스터 룰북 원문 (V311.63 완결판)
 # ==========================================
 RULE_BOOK_FULL = """
 # [식품 패키지 표시사항 QC 자동화 검수 시스템 룰북]
@@ -500,7 +500,7 @@ def main():
     </style>
     """
     st.markdown(print_css, unsafe_allow_html=True)
-    st.title("🏭 식품 표시사항 정밀 검토 시스템 (V311.62 - 영양성분 '0' 표시 완결판)")
+    st.title("🏭 식품 표시사항 정밀 검토 시스템 (V311.63 - UI 뼈대 견고화 및 프롬프트 최적화판)")
     st.markdown("<hr class='hide-on-print'>", unsafe_allow_html=True)
 
     with st.sidebar:
@@ -606,15 +606,18 @@ def main():
         if st.button("🚀 전체 시스템 파일 연동 (Vision API 자동 가동)"):
             with st.spinner("파일을 AI 시스템에 연동 중입니다..."):
                 content, paths = get_uploaded_content()
-                st.session_state["uploaded_content"] = content
-                st.session_state["local_file_paths"] = paths
-                
-                st.session_state["has_recipe"] = bool(recipe_docs)
-                st.session_state["has_labels"] = bool(label_docs)
-                st.session_state["doc_type_state"] = doc_type
-                st.session_state["inspection_mode_state"] = inspection_mode
-                
-                st.success("✅ 파일 등록 완료! 이제 우측 탭에서 검토를 시작하세요.")
+                if not content:
+                     st.warning("⚠️ 업로드된 파일이 없거나 처리할 수 없습니다. 파일을 확인해주세요.")
+                else:
+                    st.session_state["uploaded_content"] = content
+                    st.session_state["local_file_paths"] = paths
+                    
+                    st.session_state["has_recipe"] = bool(recipe_docs)
+                    st.session_state["has_labels"] = bool(label_docs)
+                    st.session_state["doc_type_state"] = doc_type
+                    st.session_state["inspection_mode_state"] = inspection_mode
+                    
+                    st.success("✅ 파일 등록 완료! 이제 우측 탭에서 검토를 시작하세요.")
 
     def run_qc_3pass(tab_rules: str, judgment_prompt: str, extract_missions_list: list = None):
         if not st.session_state["uploaded_content"]:
@@ -836,7 +839,7 @@ def main():
 - 적발 양식: "🚨 [누락]: 팩 시안의 'OOO' 원료가 박스 시안에서 완전히 누락되었습니다."
 - 이상 없을 시: "✅ 팩 시안 대비 통째로 누락된 원료 없음." (※ 단순 띄어쓰기/오타 오류는 위의 표에서만 지적하고 여기서는 완전히 빠진 경우만 적발할 것)
 
-"""
+\n"""
 
                 # STEP 3: 마스터표 vs 시안 법적 대조
                 if has_any_doc:
@@ -855,9 +858,9 @@ def main():
 - 적발 양식: "🚨 [누락]: 서류의 'OOO' 원료가 시안에서 완전히 누락되었습니다."
 - 이상 없을 시: "✅ 서류상 누락된 원료 없음."
 
-"""
+\n"""
                 if not has_any_doc and "박스" not in ins_mode:
-                    common_tab2_prompts += "## 2️⃣-1. [시안 표기 원재료명 리스트]\n(※ 증빙 서류 미제출로 서류 대조 및 원산지 검증 불가)\n\n## 2️⃣-2. [자체 형식 검토 매트릭스]\n| 시안 표기 개별 원재료명 (1줄에 딱 1개씩만) | 형식 검토 결과 및 사유 (단답형 금지, 2~3문장 서술) | 판정 |\n|---|---|---|\n"
+                    common_tab2_prompts += "## 2️⃣-1. [시안 표기 원재료명 리스트]\n(※ 증빙 서류 미제출로 서류 대조 및 원산지 검증 불가)\n\n## 2️⃣-2. [자체 형식 검토 매트릭스]\n| 시안 표기 개별 원재료명 (1줄에 딱 1개씩만) | 형식 검토 결과 및 사유 (단답형 금지, 2~3문장 서술) | 판정 |\n|---|---|---|\n\n"
 
                 # STEP 4: 동적 넘버링 하단 폼 (알레르기, 첨가물 등)
                 next_step = 4 if ("박스" in ins_mode and has_any_doc) else (3 if ("박스" in ins_mode or has_any_doc) else 3)
@@ -867,8 +870,7 @@ def main():
                 num_adm = next_step + 3
                 num_typ = next_step + 4
 
-                common_tab2_bottom = f"""
-### 🚨 2️⃣-{num_add}. [식품첨가물 범용 형식주의 스나이퍼 (Rule 85 강력 적용)]
+                common_tab2_bottom = f"""### 🚨 2️⃣-{num_add}. [식품첨가물 범용 형식주의 스나이퍼 (Rule 85 강력 적용)]
 ⭐ **[5% 미만 복합원재료 하극상 금지 (Rule 5 적용)]**: 첨가물 룰을 적용하기 전에 해당 원료가 배합비 5% 미만 복합원재료인지 반드시 확인하십시오. 5% 미만 복합원재료 안의 첨가물은 명칭/용도 표시 의무가 아예 면제되므로 절대 지적하지 마십시오.
 - **[명칭 축약 및 용도 표시 검사 결과]**: (※ 반드시 표 4, 5, 6 DB 소속을 확인한 뒤 판정할 것)
 - **[임의 기호 창조 검사 결과]**: 
