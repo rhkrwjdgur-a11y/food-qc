@@ -592,11 +592,26 @@ def main():
                     vision_text = extract_text_with_vision(file_path)
                     user_content.append(f"[Vision API 순수 OCR 추출 텍스트 (참조용)]\n{vision_text}\n---")
                 
-                max_retries = 5 
+               max_retries = 5 
                 for attempt in range(max_retries):
                     try:
-                        up = genai.upload_file(file_path)
+                        # ⭐ [V311.82 패치] 스트림릿 클라우드 업로드 에러(ResumableUploadError) 원천 차단
+                        try:
+                            # 분할 업로드를 강제로 꺼서(resumable=False) 방화벽 충돌 방지 (한 번에 통째로 전송)
+                            up = genai.upload_file(file_path, resumable=False)
+                        except TypeError:
+                            # 만약 라이브러리 버전 문제로 에러가 나면 기본값으로 우회
+                            up = genai.upload_file(file_path)
+                            
                         while up.state.name == "PROCESSING":
+                            time.sleep(3)
+                            up = genai.get_file(up.name) 
+                        if up.state.name == "FAILED": raise Exception("구글 서버 처리 실패")
+                        user_content.append(up)
+                        return
+                    except Exception as e:
+                        if attempt == max_retries - 1: raise e
+                        time.sleep(3 * (attempt + 1))
                             time.sleep(3)
                             up = genai.get_file(up.name) 
                         if up.state.name == "FAILED": raise Exception("구글 서버 처리 실패")
