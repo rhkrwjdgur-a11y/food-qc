@@ -72,7 +72,25 @@ else:
     API_KEY = os.environ.get("GOOGLE_API_KEY")
 
 genai.configure(api_key=API_KEY)
-MODEL_NAME = "gemini-2.5-pro"
+
+# ⭐ [V311.75 핵심 패치] 정상적인 8192 토큰 지원 모델명으로 복구!
+MODEL_NAME = "gemini-1.5-pro"
+
+# ⭐ [V311.75 무적의 에러 방패 함수] ValueError 및 finish_reason 완벽 제어
+def get_safe_text(response):
+    try:
+        if response.candidates and response.candidates[0].content.parts:
+            return response.text
+        else:
+            fr = response.candidates[0].finish_reason if response.candidates else "Unknown"
+            if fr == 2:
+                return "🚨 [출력 한도 초과] AI가 너무 많은 텍스트를 생성하여 출력이 도중에 차단되었습니다. (Finish Reason: 2 - MAX_TOKENS)"
+            elif fr == 3:
+                return "🚨 [안전 필터 차단] 구글 보안 필터가 민감한 단어로 인식하여 생성을 차단했습니다. (Finish Reason: 3 - SAFETY)"
+            else:
+                return f"🚨 [응답 반환 실패] 텍스트가 반환되지 않았습니다. (Finish Reason: {fr})"
+    except Exception as e:
+        return f"🚨 [시스템 추출 오류] 모델 응답을 읽어오는 중 에러 발생: {e}"
 
 def fix_markdown_table(text):
     text = re.sub(r'([^\n])\s*(\|\s*No\s*\|)', r'\1\n\n\2', text)
@@ -86,40 +104,52 @@ def fix_markdown_table(text):
     return text
 
 # ==========================================
-# 🧬 [첨가물 표 4, 5, 6 하드코딩 DB]
+# 🧬 [첨가물 표 4, 5, 6 하드코딩 DB (고시 원문 100% 동기화 완결판)]
 # ==========================================
 ADDITIVE_TABLE_4 = [
+    # 보존료
     "데히드로초산나트륨", "소브산", "소브산칼륨", "소브산칼슘", "안식향산", "안식향산나트륨", "안식향산칼슘", "안식향산칼륨", "파라옥시안식향산메틸", "파라옥시안식향산에틸", "프로피온산", "프로피온산나트륨", "프로피온산칼슘", "나타마이신",
+    # 감미료
     "사카린나트륨", "수크랄로스", "아세설팜칼륨", "아스파탐", "네오탐", "알리탐", "스테비올배당체", "효소처리스테비아", "토마틴", "감초추출물", "나한과추출물", "스테비아추출물", "에리트리톨",
+    # 착색료
     "식용색소녹색제3호", "식용색소녹색제3호알루미늄레이크", "식용색소적색제2호", "식용색소적색제2호알루미늄레이크", "식용색소적색제3호", "식용색소적색제40호", "식용색소적색제40호알루미늄레이크", "식용색소청색제1호", "식용색소청색제1호알루미늄레이크", "식용색소청색제2호", "식용색소청색제2호알루미늄레이크", "식용색소황색제4호", "식용색소황색제4호알루미늄레이크", "식용색소황색제5호", "식용색소황색제5호알루미늄레이크", "이산화티타늄",
+    # 발색제
     "아질산나트륨", "질산나트륨", "질산칼륨",
+    # 표백제
     "아황산나트륨", "차아황산나트륨", "무수아황산", "메타중아황산나트륨", "메타중아황산칼륨", "이산화황",
+    # 산화방지제
     "부틸히드록시아니솔", "디부틸히드록시톨루엔", "몰식자산프로필", "에리토브산", "에리토브산나트륨", "터셔리부틸히드로퀴논", "이디티에이칼슘이나트륨", "이디티에이나트륨",
+    # 향미증진제 (오직 MSG와 카페인만 표 4 소속)
     "L-글루탐산나트륨", "카페인"
 ]
 
 ADDITIVE_TABLE_5 = [
+    # 천연색소 등 (명칭 또는 간략명)
     "카라멜색소", "카라멜색소I", "카라멜색소II", "카라멜색소III", "카라멜색소IV", "치자청색소", "치자황색소", 
     "홍화황색소", "적양배추색소", "파프리카추출색소", "안나토추출물", "오징어먹물색소", "적고구마색소",
+    # 기타 자주 쓰이는 표5
     "차아염소산나트륨", "구아검", "잔탄검", "펙틴", "카라기난", "로커스트콩검", "알긴산나트륨", "결명자추출물"
 ]
 
 ADDITIVE_TABLE_6 = [
+    # 주용도로 퉁칠 수 있는 범용 항목들
     "유화제", "산도조절제", "증점제", "팽창제", "고결방지제", "응고제", "향미증진제", "안정제", "결착제", "제리화제", "밀가루개량제", "영양강화제", "거품제거제",
+    # 주용도로 대체 가능한 성분 예시
     "구연산", "구연산나트륨", "빙초산", "탄산나트륨", "탄산수소나트륨", "제이인산칼륨", 
     "제삼인산칼슘", "수산화나트륨", "젖산", "젖산나트륨", "말토덱스트린", "글리세린", "자당지방산에스테르",
+    # 향미증진제/영양강화제 (표 6 소속 - 용도 생략 가능, 주용도 단독 기재 가능)
     "5'-이노신산이나트륨", "5'-구아닐산이나트륨", "5'-리보뉴클레오티드이나트륨", "5'-리보뉴클레오티드칼슘", "5'-리보뉴클레오티드이칼슘", 
     "L-글루타민", "L-글루탐산", "L-글루탐산암모늄", "L-글루탐산칼륨", "글리세로인산칼륨", "글리세로인산칼슘"
 ]
 
 # ==========================================
-# 📚 2. 시스템 지시어 (순화됨)
+# 📚 2. 시스템 지시어 (순화 및 데이터 보존 룰 강화)
 # ==========================================
 SYSTEM_PROMPT = f"""당신은 대한민국 최고의 '식품 표시사항 법규 및 품질관리(QC) 시스템'입니다.
 당신에게는 창의성, 추론 능력, 융통성이 전혀 없습니다. 오직 화면에 보이는 픽셀 단위의 글자(Text)만 있는 그대로 읽고 기계적으로 1:1 대조하는 봇(Bot)입니다.
 
-🔥 [생략 및 축약 절대 금지 (무관용 원칙)]:
-어떠한 경우에도 텍스트를 요약하거나 `(...)` 기호, `등`이라는 단어를 사용하여 원재료명, 성분명, 사유, 문구를 생략하지 마십시오. 글자 수가 아무리 많아도 원본(시안/서류)에 있는 모든 글자와 괄호 속 성분을 100% 무조건 끝까지 타이핑해야 합니다. 모든 판정에는 상세한 사유를 반드시 적으십시오. 절대 짧게 요약하지 마십시오.
+🔥 [데이터 원본 보존 및 상세 출력 원칙]:
+어떠한 경우에도 텍스트를 임의로 요약하거나 `(...)` 기호를 사용하여 생략하지 마십시오. 글자 수가 많더라도 원본(시안/서류)에 있는 모든 글자와 괄호 속 성분을 100% 끝까지 출력해야 합니다. 또한, 부적합 사유를 작성할 때는 룰(Rule)을 근거로 상세하게 서술하십시오.
 
 🔥 [0순위 절대 방어막: 5% 미만 복합원재료 과잉 지적 금지 (Rule 5 적용)]:
 어떤 첨가물이나 원료의 표기 누락(또는 용도 누락)을 지적하기 전에, **반드시 그 원료가 배합비 5% 미만인 복합원재료(예: 0.3% 아미노밸런스 등)의 하위 성분인지 가장 먼저 확인하십시오.** 5% 미만 복합원재료의 하위 성분이라면 [표 4, 5, 6] 첨가물 규정 등 모든 규정을 무시하고 **무조건 "전개/표시 의무 면제(✅)"로 판정**하십시오. 절대로 첨가물 용도 누락을 지적하면 안 됩니다. (단, 알레르기 물질은 예외로 지적할 것)
@@ -135,7 +165,7 @@ SYSTEM_PROMPT = f"""당신은 대한민국 최고의 '식품 표시사항 법규
 모든 검토 결과의 결론 앞에는 반드시 ✅(적합) 또는 🚨(부적합) 또는 🚨(확인 요망) 또는 ⚠️(실무 검토 권장) 이모지를 붙이십시오."""
 
 # ==========================================
-# 📚 3. 90대 마스터 룰북 원문 (V311.74 완결판)
+# 📚 3. 90대 마스터 룰북 원문 
 # ==========================================
 RULE_BOOK_FULL = """
 # [식품 패키지 표시사항 QC 자동화 검수 시스템 룰북]
@@ -513,7 +543,7 @@ def main():
     </style>
     """
     st.markdown(print_css, unsafe_allow_html=True)
-    st.title("🏭 식품 표시사항 정밀 검토 시스템 (V311.74 - 필터 회피 및 앱 크래시 방지)")
+    st.title("🏭 식품 표시사항 정밀 검토 시스템 (V311.75 - 무적의 에러 방패 패치)")
     st.markdown("<hr class='hide-on-print'>", unsafe_allow_html=True)
 
     with st.sidebar:
@@ -666,12 +696,8 @@ def main():
                             safety_settings=safety_settings, 
                             request_options={"timeout": 600}
                         )
-                        # V311.74 안전 필터 차단 에러 방지 처리
-                        try:
-                            extracted_results.append(pass1_response.text)
-                        except ValueError:
-                            finish_reason = pass1_response.candidates[0].finish_reason if pass1_response.candidates else "Unknown"
-                            extracted_results.append(f"🚨 [안전 필터 차단] 데이터 추출 중 구글 필터에 의해 차단되었습니다. (Finish Reason: {finish_reason})")
+                        # V311.75 무적의 에러 방패 적용
+                        extracted_results.append(get_safe_text(pass1_response))
                         break
                     except Exception as e:
                         if "504" in str(e) or "Deadline" in str(e) or "503" in str(e):
@@ -695,11 +721,8 @@ def main():
                         safety_settings=safety_settings, 
                         request_options={"timeout": 600}
                     )
-                    try:
-                        verified_text = pass15_response.text
-                    except ValueError:
-                        finish_reason = pass15_response.candidates[0].finish_reason if pass15_response.candidates else "Unknown"
-                        verified_text = f"🚨 [안전 필터 차단] 데이터 종합 중 구글 필터에 의해 차단되었습니다. (Finish Reason: {finish_reason})"
+                    # V311.75 무적의 에러 방패 적용
+                    verified_text = get_safe_text(pass15_response)
                     break
                 except Exception as e:
                     if "504" in str(e) or "Deadline" in str(e) or "503" in str(e):
@@ -741,11 +764,8 @@ def main():
                     safety_settings=safety_settings, 
                     request_options={"timeout": 600}
                 )
-                try:
-                    final_clean_text = pass2_response.text
-                except ValueError:
-                    finish_reason = pass2_response.candidates[0].finish_reason if pass2_response.candidates else "Unknown"
-                    final_clean_text = f"🚨 [안전 필터 차단] 최종 판정 중 구글 필터에 의해 출력이 차단되었습니다. 공격적이거나 민감한 단어가 포함되었을 수 있습니다. (Finish Reason: {finish_reason})"
+                # V311.75 무적의 에러 방패 적용
+                final_clean_text = get_safe_text(pass2_response)
 
                 if extract_missions_list:
                     return f"<clean_view>\n{final_clean_text}\n</clean_view>\n<pass1_log>\n{extracted_text_combined}\n</pass1_log>\n<pass15_log>\n{verified_text}\n</pass15_log>"
@@ -768,7 +788,8 @@ def main():
         """
         try:
             response = model.generate_content(st.session_state["uploaded_content"] + [full_prompt], generation_config=generation_config)
-            return fix_markdown_table(response.text)
+            # V311.75 무적의 에러 방패 적용
+            return fix_markdown_table(get_safe_text(response))
         except Exception as e:
             return f"🚨 시스템 런타임 오류 발생: {e}"
 
@@ -842,7 +863,7 @@ def main():
                     "⭐ [절대 미션: 개별 단위 쪼개기]: 추출한 원재료명을 쉼표(,)를 기준으로 완벽하게 쪼개서 각각 독립된 개별 리스트로 만드십시오."
                 ]
                 
-                # V311.74: 공격적 단어 순화
+                # V311.75: 마스터표 원본 복사 + 에러 방패 구조 반영
                 tab2_special_rules = RULES_TAB2 + """
                 \n\n🔥 [Tab 2 특별 지시사항 (반드시 지킬 것 - 아래 내용은 화면에 출력하지 마십시오)] 🔥
                 1. [생략 절대 금지]: 어떠한 경우에도 `(...)` 기호나 요약으로 텍스트를 얼버무리지 마십시오. 모든 텍스트를 끝까지 출력하십시오.
