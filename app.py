@@ -153,7 +153,7 @@ SYSTEM_PROMPT = f"""당신은 대한민국 최고의 '식품 표시사항 법규
 모든 검토 결과의 결론 앞에는 반드시 ✅(적합) 또는 🚨(부적합) 또는 🚨(확인 요망) 또는 ⚠️(실무 검토 권장) 이모지를 붙이십시오."""
 
 # ==========================================
-# 📚 3. 90대 마스터 룰북 원문
+# 📚 3. 90대 마스터 룰북 원문 (절대 건드리지 않음)
 # ==========================================
 RULE_BOOK_FULL = """
 # [식품 패키지 표시사항 QC 자동화 검수 시스템 룰북]
@@ -298,7 +298,7 @@ RULE_BOOK_FULL = """
 🔥 **Rule 35. [🌟 범용 간략명/관용명 허용 및 혼합제제 괄호 내부 N종 은폐 금지 범용 룰]**
    - **[관용명/동의어 합법 처리]**: 실무적으로 호환되는 동의어나 관용명 표기는 100% 합법(✅)입니다. (예: 옥배유=옥수수기름, 액상과당=기타과당=고과당, 황백당=갈색설탕 등)
    - **[내부 식별 코드 생략]**: 서류상의 납품업체 전용 식별코드(예: E(30), -2 등)는 생략 완벽 합법(✅).
-   - ⭐ **[용도명 N종 무조건 합법]**: **'향료 3종', '영양강화제 3종', '유화제 2종'**처럼 [표 6]에 속하는 주용도명 뒤에 숫자를 붙여 묶는 것은 식약처 규정상 **완벽한 합법**입니다. 
+   - ⭐ **[용도명 N종 무조건 합법]**: **'향료 3종', '영양강화제 3종', '유화제 2종'**처럼 [표 6]에 속하는 주용도명 뒤에 숫자를 붙여 묶는 단어는 식약처 규정상 **완벽한 합법**입니다. 
    - ⭐ **[혼합제제 괄호 내부 은폐 절대 불가]**: 패키지 시안에 `혼합제제(산도조절제 2종)`처럼 묶거나, 여러 혼합제제의 하위 성분들을 몰래 빼와서 임의로 `영양강화제 3종`처럼 묶어 은폐(블랙박스화)한 경우 명백한 위법(🚨부적합)으로 처리하십시오. 단, 애초에 레시피에 3가지 성분이 독립적으로 투입되어 그것들을 용도명으로 합법적으로 묶은 경우는 제외(적합)입니다.
 
 🔥 **Rule 36. [주의사항 오탈자 스캔]**
@@ -534,7 +534,7 @@ def main():
     </style>
     """
     st.markdown(print_css, unsafe_allow_html=True)
-    st.title("🏭 식품 표시사항 정밀 검토 시스템 (V312.30 - 영양성분 허용오차 커트라인 수치화 패치)")
+    st.title("🏭 식품 표시사항 정밀 검토 시스템 (V312.60 - 무결점 락온 패치)")
     st.markdown("<hr class='hide-on-print'>", unsafe_allow_html=True)
 
     with st.sidebar:
@@ -595,9 +595,7 @@ def main():
                 max_retries = 5 
                 for attempt in range(max_retries):
                     try:
-                        # 🌟 원상복구 완료 (resumable=False 제거, 기본 청크 단위 업로드로 정상 통신)
                         up = genai.upload_file(file_path)
-                        
                         while up.state.name == "PROCESSING":
                             time.sleep(3)
                             up = genai.get_file(up.name) 
@@ -673,6 +671,8 @@ def main():
         ]
 
         extracted_text_combined = ""
+        pass18_result = "맞춤법 전용 스캔 생략됨 (본 탭은 추출 미션 없음)"
+        verified_text = ""
 
         if extract_missions_list:
             extracted_results = []
@@ -723,12 +723,40 @@ def main():
                             continue
                     break 
 
+            # ⭐ V312.50: PASS 1.8 추가 (맞춤법 전용 스캐너 - 어텐션 100% 집중)
+            pass18_prompt = f"""
+[PASS 1.8 - 맞춤법/띄어쓰기 전용 스캐너]
+지금부터 당신은 국립국어원 맞춤법 검사기입니다. 앞서 추출된 텍스트 내용 전체를 픽셀 단위로 스캔하여 오직 '띄어쓰기 오류', '오탈자', '부자연스러운 접미사(예: 특성 상 -> 특성상, 있으니음용 -> 있으니 음용)'만을 족집게처럼 찾아내십시오. 
+식품 법규 룰 대조나 적합/부적합 판정 등은 절대 금지합니다.
+발견된 오탈자와 교정본을 [원문] -> [수정 권장] 리스트 형태로만 출력하십시오. (발견된 사항이 없으면 '특이사항 없음' 출력)
+"""
+            for attempt in range(max_retries):
+                try:
+                    pass18_response = model.generate_content(
+                        content + [pass15_prompt + "\n\n" + pass18_prompt], 
+                        generation_config=generation_config, 
+                        safety_settings=safety_settings, 
+                        request_options={"timeout": 600}
+                    )
+                    pass18_result = get_safe_text(pass18_response)
+                    break
+                except Exception as e:
+                    if "504" in str(e) or "Deadline" in str(e) or "503" in str(e):
+                        if attempt < max_retries - 1:
+                            time.sleep(10)
+                            continue
+                    pass18_result = f"🚨 Pass 1.8(맞춤법 봇) 에러: {e}"
+                    break
+
         pass2_context = ""
         if extract_missions_list:
             pass2_context = f"""
 ========================================
 [검증된 텍스트 데이터 - Pass 1.5 최종 확정본]
 {verified_text}
+
+[맞춤법/오탈자 교정 데이터 - Pass 1.8 맞춤법 전용 봇 결과]
+{pass18_result}
 ========================================
 """
         pass2_prompt = f"""
@@ -759,7 +787,7 @@ def main():
                 final_clean_text = get_safe_text(pass2_response)
 
                 if extract_missions_list:
-                    return f"<clean_view>\n{final_clean_text}\n</clean_view>\n<pass1_log>\n{extracted_text_combined}\n</pass1_log>\n<pass15_log>\n{verified_text}\n</pass15_log>"
+                    return f"<clean_view>\n{final_clean_text}\n</clean_view>\n<pass1_log>\n{extracted_text_combined}\n</pass1_log>\n<pass15_log>\n{verified_text}\n</pass15_log>\n<pass18_log>\n{pass18_result}\n</pass18_log>"
                 return final_clean_text
             except Exception as e:
                 if "504" in str(e) or "Deadline" in str(e) or "503" in str(e):
@@ -772,7 +800,6 @@ def main():
         if not st.session_state["uploaded_content"]:
             return None
         model = genai.GenerativeModel(MODEL_NAME, system_instruction=SYSTEM_PROMPT)
-        # ⭐ V311.80: max_output_tokens=65536 복구
         generation_config = genai.types.GenerationConfig(temperature=0.0, max_output_tokens=65536)
         full_prompt = f"""
         [제품유형]: {product_type}\n[검토모드]: {inspection_mode}\n[우리 공장 알레르기 마스터 목록]: {factory_allergens}
@@ -790,9 +817,13 @@ def main():
         clean_match = re.search(r'<clean_view>(.*?)</clean_view>', result, re.DOTALL)
         pass1_match = re.search(r'<pass1_log>(.*?)</pass1_log>', result, re.DOTALL)
         pass15_match = re.search(r'<pass15_log>(.*?)</pass15_log>', result, re.DOTALL)
+        pass18_match = re.search(r'<pass18_log>(.*?)</pass18_log>', result, re.DOTALL)
 
-        if pass1_match or pass15_match:
+        if pass1_match or pass15_match or pass18_match:
             with st.expander(f"🕵️‍♂️ [시스템 로그실] {tab_name} Pass 연산 원본 추출 데이터 보기 (필요시 클릭)"):
+                if pass18_match:
+                    st.info("🎯 Pass 1.8 맞춤법 전용 스캐너 (어텐션 100% 집중본)")
+                    st.code(pass18_match.group(1).strip())
                 if pass15_match:
                     st.info("✅ Pass 1.5 자체 복정 완료본 (오독/환각 제거 확정본)")
                     st.code(pass15_match.group(1).strip())
@@ -816,7 +847,7 @@ def main():
         if st.button("▶️ 주표시면 분석 시작", key="btn_main"):
             with st.spinner("【정밀 법리 검수 매트릭스 연산 중...】"):
                 missions = [
-                    "주표시면(앞면) 이미지에서 제품명, 내용량, 마케팅 문구뿐만 아니라, **표나 리스트 형태로 나열된 '모든 영양성분/원재료의 명칭과 함량 수치'를 단 하나도 누락 없이 100% 추출**하여 영양강조 컷오프 심사대로 넘기십시오.",
+                    "주표시면(앞면) 이미지에서 제품명, 내용량, 마케팅 문구뿐만 아니라, **표나 리스트 형태로 나열된 '모든 영양성분/원재료의 명칭과 함량 수치'를 단 단 하나도 누락 없이 100% 추출**하여 영양강조 컷오프 심사대로 넘기십시오.",
                     "뒷면/영양성분표 이미지를 스캔하여 '총 내용량' 및 '총 열량(kcal)', 앞면에 강조된 특정 영양소의 '% 기준치' 추출.",
                     "업로드된 서류에서 주표시면에 강조된 성분의 투입량(%)과 실측값(mg/g) 추출.",
                     "시안 전체에서 원재료명 리스트를 찾아 추출하십시오."
@@ -834,7 +865,7 @@ def main():
 | **영양강조 컷오프(4대 조건)** | [Rule 21, 52] | (※ 100g, 100mL, 100kcal, 1회섭취량 중 하나라도 충족하는지 수식으로 증명할 것) | |
 | **국가 공인 인증 도안 마케팅** | [Rule 86] | | |
 | **유기농/친환경 마크 검증** | [Rule 84] | | |
-| ⭐ **전체 텍스트 오탈자 및 띄어쓰기 스캔** | 전수 검사 | (모든 주의문구, 설명글 등의 오타 및 띄어쓰기 점검) | |
+| ⭐ **전체 텍스트 오탈자 및 띄어쓰기 스캔** | 전수 검사 | (Pass 1.8 맞춤법 봇의 결과를 바탕으로 작성할 것. '특성상', '있으니 음용' 등 띄어쓰기 오류 100% 기재) | |
 """
                 st.session_state["result_tab1"] = run_qc_3pass(RULES_TAB1, judgment_prompt, missions)
         display_result(st.session_state["result_tab1"], "주표시면")
@@ -854,7 +885,7 @@ def main():
                     "⭐ [절대 미션: 개별 단위 쪼개기]: 추출한 원재료명을 쉼표(,)를 기준으로 완벽하게 쪼개서 각각 독립된 개별 리스트로 만드십시오."
                 ]
                 
-                # ⭐ V312.20: CoT (생각의 사슬) 알고리즘 강제 패치 및 마스터표 완벽 복사 유지
+                # ⭐ V312.60: 98% 컷오프(Rule 1) 예외 사전 락온 추가 
                 tab2_special_rules = RULES_TAB2 + """
                 \n\n🔥 [Tab 2 특별 지시사항 (반드시 지킬 것 - 화면 출력 금지)] 🔥
                 1. [마스터표 강제 완성 및 절대 생략 금지]: 서류의 데이터가 아무리 길어도 마스터표 작성 시 절대 중간에 끊거나 `(...)` 기호를 사용하여 요약하지 마십시오. 원본 데이터의 1행부터 마지막 행까지 100% 전수 조사하여 끝까지 표를 완성하십시오. (출력이 끊어지면 시스템 치명적 오류로 간주됩니다). 서류에 '영양강화제 3종'과 같이 별도로 묶인 항목이 단독으로 투입되었다면, AI가 임의로 다른 혼합제제 소속으로 추론하지 말고, 보이는 그대로 독립된 행으로 작성하십시오.
@@ -866,11 +897,12 @@ def main():
                 """
 
                 judgment_prompt = "## 🧠 [사전 연산: 원산지 Rank B 및 혼합제제 해체 알고리즘]\n"
-                judgment_prompt += "(AI는 아래 4단계를 단답형으로 100% 명확히 작성하여 논리를 확정한 후 대조 표를 작성할 것)\n"
+                judgment_prompt += "(AI는 아래 5단계를 단답형으로 100% 명확히 작성하여 논리를 확정한 후 대조 표를 작성할 것)\n"
                 judgment_prompt += "1. **[Rank B 제외 대상 필터링]**: 마스터표 원료 중 [정제수, 당류가공품, 주정, 식품첨가물] 카테고리에 해당하여 원산지 의무가 완전히 면제되는 원료 목록:\n   - [삭제 원료명]: \n"
                 judgment_prompt += "2. **[Rank B Top 3 확정]**: 위 대상을 제외하고 남은 실질 원료들의 배합비율 기준 상위 1, 2, 3위 원료:\n   - 1위: [ ], 2위: [ ], 3위: [ ]\n"
-                judgment_prompt += "3. **[Rule 89 타겟 락온]**: 국내 가공품 이중 표기(Rule 89) 검사를 수행할 타겟 (오직 위 2번의 Rank B 1~3위 원료 중에서만 선정. 당류가공품 등에는 절대 적용 불가):\n   - [적용 대상 원료]: \n"
-                judgment_prompt += "4. **[복합원재료 vs 혼합제제 전개 라우팅]**: 서류상 혼합물들에 대하여 전개/면제 여부 사전 확정:\n   - [전개 면제 합법 (배합비 5% 미만인 일반 복합원재료)]: \n   - [전개 필수 (식품유형이 '혼합제제'이므로 배합비율 무관하게 Rule 44 적용)]: \n\n"
+                judgment_prompt += "3. ⭐ **[Rule 1: 98% 컷오프 예외 판정]**: Rank B 1순위 원료의 배합비가 98% 이상인가? (98% 이상일 경우 '2위 및 3위 원료 원산지 표기 면제 확정'이라고 명확히 락온(Lock-on) 할 것):\n"
+                judgment_prompt += "4. **[Rule 89 타겟 락온]**: 국내 가공품 이중 표기(Rule 89) 검사를 수행할 타겟 (오직 위 2번의 Rank B 1~3위 원료 중에서만 선정. 단, 98% 예외 룰 적용 시 1위만 타겟팅. 당류가공품 등에는 절대 적용 불가):\n   - [적용 대상 원료]: \n"
+                judgment_prompt += "5. **[복합원재료 vs 혼합제제 전개 라우팅]**: 서류상 혼합물들에 대하여 전개/면제 여부 사전 확정:\n   - [전개 면제 합법 (배합비 5% 미만인 일반 복합원재료)]: \n   - [전개 필수 (식품유형이 '혼합제제'이므로 배합비율 무관하게 Rule 44 적용)]: \n\n"
 
                 step_offset = 1 if has_any_doc else 0
 
@@ -913,7 +945,7 @@ def main():
                 judgment_prompt += f"## ⚖️ 2️⃣-{num_mix}. [배합비 2% 이상 원료 전개 순서 정밀 검증 (Rule 34)]\n- **[서류상 2% 이상 원료 순서 (배합비 % 포함하여 100% 상세 기재)]**:\n- **[시안에 적힌 실제 나열 순서]**:\n- **[최종 판정 및 사유]**:\n\n"
                 judgment_prompt += f"## 🧮 2️⃣-{num_alg}. [알레르기 및 교차오염 수학적 정밀 검증 (Rule 38)]\n- **[공장 마스터 목록]**:\n- **[직접 투입된 알레르기]**:\n- **[도출된 교차오염 정답지]**:\n- **[시안 표기 주의문구]**:\n- **[최종 판정 및 사유]**:\n\n"
                 judgment_prompt += f"## 🏛️ 2️⃣-{num_adm}. [행정 정보 교차 검증]\n- ⭐ [Rule 76] 유통전문판매원/판매원 타이틀 강제 확인:\n\n"
-                judgment_prompt += f"## 🔍 2️⃣-{num_typ}. [전체 텍스트 오탈자 및 띄어쓰기 스캔 (전수 검사)]\n- ⭐ **[검토 결과]**:\n"
+                judgment_prompt += f"## 🔍 2️⃣-{num_typ}. [전체 텍스트 오탈자 및 띄어쓰기 스캔 (전수 검사)]\n- ⭐ **[검토 결과]**: (Pass 1.8 맞춤법 봇의 결과를 바탕으로 작성할 것. '특성상', '있으니 음용' 등 띄어쓰기 오류 100% 기재)\n"
 
                 st.session_state["result_tab2"] = run_qc_3pass(tab2_special_rules, judgment_prompt, missions)
         
@@ -931,15 +963,20 @@ def main():
                     "시험성적서 서류에서 각 영양성분의 '100g당 실측값' 데이터를 모두 추출하고, 시안에 명시된 1회 제공량(또는 1포 용량)에 맞게 환산 계수(예: 180mL면 1.8곱하기)를 적용한 계산값을 미리 준비해 두십시오. 아울러 '1일 영양성분 기준치(Rule 41)'에 따른 % 값도 수학적으로 역산해 두십시오."
                 ]
                 
-                # ⭐ V312.30: 영양성분 허용오차 커트라인 수치화 강제 패치
+                # ⭐ V312.60: 영양성분 허용오차 커트라인 수치화 및 비현실적 괴리 경고 패치 유지
                 tab3_special_rules = RULES_TAB3 + """
                 \n\n🔥 [Tab 3 특별 지시사항 (반드시 지킬 것 - 화면 출력 금지)] 🔥
                 1. [Rule 23 '0' 표시 절대 원칙]: 시안의 수치를 추출하고, 성적서 환산값이 특정 기준(예: 열량 5kcal 미만, 탄수화물/당류/지방/단백질 0.5g 미만, 트랜스지방 0.2g 미만 등)에 해당하면 무조건 '0'으로 판정하십시오.
                 2. [내외포장 1:1 대조 (Rule 68, 70)]: 박스와 팩의 1개당 영양 수치가 100% 픽셀 일치하는지 스캔하십시오.
                 3. [수식 증명]: 반드시 '환산 수식'과 '1일 기준치 대비 %(Rule 41)'를 직접 수학적으로 계산하여 보여주십시오.
-                4. [안전율 인정]: 80%~120% 오차 범위 안에 있으나 반올림 수치가 살짝 다를 경우 '보수적 표기(안전율)'로 인정하여 ⚠️(확인 요망) 처리하고 절대 🚨부적합 처리 금지하십시오.
-                5. ⭐ [허용오차 커트라인 수치화 강제]: 법적 기준선을 적을 때 절대로 '80% 이상', '120% 이하'라고만 얼버무리지 마십시오. 반드시 시안 표시량(B)에 0.8 또는 1.2를 곱한 정확한 숫자(예: 8.8g 이상, 138kcal 이하)를 계산해서 적고, 실측값이 그 숫자 범위 안에 들어오는지 직관적으로 보여주십시오.
-                6. [생략 금지]: 모든 사유와 수식을 생략 없이 구체적으로 타이핑하십시오.
+                4. ⭐ [절대 주의: 부등호 방향 및 안전율 판정]: 
+                   - 판정의 주어는 무조건 **'실측값(A)'**입니다. 표시량을 실측값으로 나누는 역계산을 절대 하지 마십시오.
+                   - 하한선 그룹(비타민, 미네랄, 단백질 등): `실측값(A) >= 커트라인(B의 80%)` 이면 무조건 합법(✅)입니다.
+                   - 상한선 그룹(열량, 당류, 나트륨, 지방 등): `실측값(A) <= 커트라인(B의 120%)` 이면 무조건 합법(✅)입니다.
+                5. ⭐ [비현실적 수치 경고 (안전율 괴리 경고)]: 
+                   - 법적 기준을 통과(합법)했더라도, 하한선 그룹에서 실측값이 표시량의 130%를 초과하거나, 상한선 그룹에서 실측값이 표시량의 80% 미만으로 너무 차이가 나면 판정 사유에 ⚠️ **(실무 확인 권장)** 경고를 추가하여 수치 재확인을 권고하십시오.
+                6. ⭐ [허용오차 커트라인 수치화 강제]: 법적 기준선을 적을 때 절대로 '80% 이상', '120% 이하'라고만 적지 마십시오. 반드시 시안 표시량(B)에 0.8 또는 1.2를 곱한 정확한 숫자(예: 8.8g 이상, 138kcal 이하)를 계산해서 적고, 실측값이 그 숫자 범위 안에 들어오는지 직관적으로 보여주십시오.
+                7. [생략 금지]: 모든 사유와 수식을 생략 없이 구체적으로 타이핑하십시오.
                 """
 
                 judgment_prompt_tab3 = ""
@@ -951,7 +988,7 @@ def main():
                 if has_any_doc:
                     title_prefix = "3️⃣-2." if "박스" in ins_mode else "3️⃣-1."
                     judgment_prompt_tab3 += f"## {title_prefix} [영양표시 오차 검증 및 % 기준치 수학적 역산 (성적서 대조)]\n"
-                    judgment_prompt_tab3 += "| 영양성분 | 성적서 환산값(A) (계산식 포함) | 시안 표시량(B) | ⚖️ 허용오차 커트라인 (표시량 기준 80% 또는 120% 계산 수치) | 🎯 % 역산 검증 (수식 포함) | 판정 및 상세 사유 (오차/안전율 판단) |\n|---|---|---|---|---|---|\n\n"
+                    judgment_prompt_tab3 += "| 영양성분 | 성적서 환산값(A) (계산식 포함) | 시안 표시량(B) | ⚖️ 허용오차 커트라인 (표시량 기준 80% 또는 120% 계산 수치) | 🎯 % 역산 검증 (수식 포함) | 판정 및 상세 사유 (오차/안전율 판단 및 괴리율 경고 필수) |\n|---|---|---|---|---|---|\n\n"
                 elif "박스" not in ins_mode:
                     judgment_prompt_tab3 += "## 3️⃣-1. [영양표시 오차 검증]\n(※ 성적서 미제출로 실측 오차 검증 생략)\n\n"
 
@@ -960,7 +997,7 @@ def main():
 - ⭐ [Rule 81] 하단 2000kcal 면책 문구 토씨 100% 대조: 
 - ⭐ [Rule 82] 영양소 법정 특수 단위/아래첨자 정밀 검증 (μg, α-TE 등): 
 - ⭐ [Rule 83] 기준치 존재 성분 % 병기 룰 대조:
-- ⭐ **[오탈자/띄어쓰기 스캔] 영양성분표 내 텍스트 및 단위 띄어쓰기 전수 검사**:
+- ⭐ **[오탈자/띄어쓰기 스캔] 영양성분표 내 텍스트 및 단위 띄어쓰기 전수 검사**: (Pass 1.8 맞춤법 봇의 결과를 바탕으로 작성할 것)
 """
                 st.session_state["result_tab3"] = run_qc_3pass(tab3_special_rules, judgment_prompt_tab3, missions)
         display_result(st.session_state["result_tab3"], "영양성분표")
@@ -988,7 +1025,7 @@ def main():
 | **액상 음료 개봉 후 주의문구** | [Rule 74] | | |
 | **CS 클레임 방어용 문구** | [Rule 75] | | |
 | **범용 식품유형 필수 주의문구** | [Rule 77] | | |
-| ⭐ **전체 텍스트 오탈자 및 띄어쓰기 스캔** | 전수 검사 | (모든 주의문구, 설명글 등의 오타 및 띄어쓰기 점검) | |
+| ⭐ **전체 텍스트 오탈자 및 띄어쓰기 스캔** | 전수 검사 | (Pass 1.8 맞춤법 봇의 결과를 바탕으로 작성할 것. 오타 및 띄어쓰기 100% 기재) | |
 """
                 st.session_state["result_tab4"] = run_qc_3pass(RULES_TAB4, judgment_prompt, missions)
         display_result(st.session_state["result_tab4"], "기타면/측면")
