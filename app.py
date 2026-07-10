@@ -534,7 +534,7 @@ def main():
     </style>
     """
     st.markdown(print_css, unsafe_allow_html=True)
-    st.title("🏭 식품 표시사항 정밀 검토 시스템 (V312.00 - CoT 알고리즘 강제 패치)")
+    st.title("🏭 식품 표시사항 정밀 검토 시스템 (V312.20 - CoT 완결 및 업로드 롤백)")
     st.markdown("<hr class='hide-on-print'>", unsafe_allow_html=True)
 
     with st.sidebar:
@@ -595,7 +595,9 @@ def main():
                 max_retries = 5 
                 for attempt in range(max_retries):
                     try:
+                        # 🌟 원상복구 (resumable=False 제거 완료 - 기본 청크 단위 업로드로 돌아감)
                         up = genai.upload_file(file_path)
+                        
                         while up.state.name == "PROCESSING":
                             time.sleep(3)
                             up = genai.get_file(up.name) 
@@ -852,7 +854,7 @@ def main():
                     "⭐ [절대 미션: 개별 단위 쪼개기]: 추출한 원재료명을 쉼표(,)를 기준으로 완벽하게 쪼개서 각각 독립된 개별 리스트로 만드십시오."
                 ]
                 
-                # ⭐ V312.00: CoT (생각의 사슬) 알고리즘 강제 패치 및 마스터표 완벽 복사
+                # ⭐ V312.20: CoT (생각의 사슬) 알고리즘 강제 패치 및 마스터표 완벽 복사 유지
                 tab2_special_rules = RULES_TAB2 + """
                 \n\n🔥 [Tab 2 특별 지시사항 (반드시 지킬 것 - 화면 출력 금지)] 🔥
                 1. [마스터표 강제 완성 및 절대 생략 금지]: 서류의 데이터가 아무리 길어도 마스터표 작성 시 절대 중간에 끊거나 `(...)` 기호를 사용하여 요약하지 마십시오. 원본 데이터의 1행부터 마지막 행까지 100% 전수 조사하여 끝까지 표를 완성하십시오. (출력이 끊어지면 시스템 치명적 오류로 간주됩니다). 서류에 '영양강화제 3종'과 같이 별도로 묶인 항목이 단독으로 투입되었다면, AI가 임의로 다른 혼합제제 소속으로 추론하지 말고, 보이는 그대로 독립된 행으로 작성하십시오.
