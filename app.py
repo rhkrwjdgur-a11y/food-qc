@@ -74,6 +74,8 @@ genai.configure(api_key=API_KEY)
 
 # ⭐ 최고급 Pro 모델 유지 (컨텍스트 윈도우 및 토큰 한도 최대치 확보)
 MODEL_NAME = "gemini-2.5-pro"
+# ⚡ 비용 절감용 초고속/경량 모델 (맞춤법 전용)
+MODEL_NAME_FLASH = "gemini-2.5-flash"
 
 def get_safe_text(response):
     try:
@@ -240,13 +242,13 @@ RULE_BOOK_FULL = """
    - 종이나 유리는 텍스트 재질 표시 의무 없음.
 
 🔥 **Rule 21. ['고/풍부', '저', '무' 영양강조표시 4대 조건 OR 법칙 및 수학적 증명 룰]**
-   - **[대원칙]**: 식약처 고시에 따라 영양강조 기준은 4가지(100g당, 100mL당, 100kcal당, 1회섭취량당) 중 **단 하나라도 충족하면 무조건 합법(✅)**입니다.
+   - **[대원칙]**: 식약처 고시에 따라 영양강조 기준은 4가지(100g당, 100mL당, 100kcal당, 1회섭취량당) 중 **단 하나라도 충족하면 무조건 합법(✅)**입니다. (AND 조건이 아님을 명심하십시오!)
    - **['고', '풍부' 표시 기준]**: 
      1) **단백질, 식이섬유**: 기준치의 20%(100g당) / 10%(100mL당) / 10%(100kcal당) / 20%(1회섭취량당) 이상.
      2) **비타민 및 무기질**: 기준치의 30%(100g당) / 15%(100mL당) / 10%(100kcal당) / 30%(1회섭취량당) 이상.
    - **['저' 표시 기준]**: 열량(100g당 40kcal 미만 또는 100mL당 20kcal 미만), 나트륨(100g당 120mg 미만) 등.
    - **['무(Zero)' 표시 기준]**: 열량(100mL당 4kcal 미만), 나트륨/지방/당류(5mg/0.5g/0.5g 미만).
-   - ⭐ **[부적합 시 절대 원칙]**: 부적합 판정을 내리려면 4가지 조건의 수식을 모조리 나열하여 전부 미달임을 증명해야 합니다. 하나라도 통과 시 무조건 합법 처리하십시오.
+   - ⭐ **[부적합 시 절대 원칙]**: 부적합 판정을 내리려면 4가지 조건의 수식을 모조리 나열하여 전부 미달임을 명백히 증명해야 합니다. 하나라도 통과 시 무조건 합법 처리하십시오.
 
 ✅ **Rule 22. [다국어 폰트 크기 예외]**
    - 외국어는 한글보다 작거나 같아야 함.
@@ -554,7 +556,7 @@ def main():
     st.markdown(print_css, unsafe_allow_html=True)
     
     # ⭐ 상단 고정 헤더 영역 (현재 검토 중인 제품명 표시)
-    st.title("🏭 식품 표시사항 정밀 검토 시스템 (V321.00)")
+    st.title("🏭 식품 표시사항 정밀 검토 시스템 (V322.00 - API 비용 최적화 및 속도 향상 패치)")
     
     current_product = st.session_state.get("current_product_name", "지정되지 않음")
     st.markdown(f"#### 🟢 **현재 검토 중인 제품:** `{current_product}`")
@@ -777,8 +779,11 @@ def main():
 """
             for attempt in range(max_retries):
                 try:
-                    pass18_response = model.generate_content(
-                        content + [pass15_prompt + "\n\n" + pass18_prompt], 
+                    # 💡 [최적화 V322.00] Pass 1.8은 무거운 이미지가 불필요하므로 content를 빼고 텍스트만 전송.
+                    # 또한 저렴하고 빠른 flash 모델을 사용하여 비용 90% 이상 절감 및 속도 대폭 상향.
+                    model_flash = genai.GenerativeModel(MODEL_NAME_FLASH)
+                    pass18_response = model_flash.generate_content(
+                        f"{pass15_prompt}\n\n{pass18_prompt}", # content 배제 (이미지 안 보냄)
                         generation_config=generation_config, 
                         safety_settings=safety_settings, 
                         request_options={"timeout": 600}
@@ -882,7 +887,7 @@ def main():
         if pass1_match or pass15_match or pass18_match:
             with st.expander(f"🕵️‍♂️ [시스템 로그실] {tab_name} Pass 연산 원본 추출 데이터 보기 (필요시 클릭)"):
                 if pass18_match:
-                    st.info("🎯 Pass 1.8 맞춤법 전용 스캐너 (어텐션 100% 집중본)")
+                    st.info("🎯 Pass 1.8 맞춤법 전용 스캐너 (초고속 Flash 모델 구동 완료)")
                     st.code(pass18_match.group(1).strip())
                 if pass15_match:
                     st.info("✅ Pass 1.5 자체 복정 및 OCR 노이즈 정제 완료본")
@@ -893,6 +898,7 @@ def main():
             st.markdown("---")
 
         if clean_match:
+            # ⭐ 핵심 변경: unsafe_allow_html=True 옵션을 통해 <br> 태그가 실제 줄바꿈으로 렌더링되게 함
             st.markdown(fix_markdown_table(clean_match.group(1).strip()), unsafe_allow_html=True)
         else:
             st.markdown(fix_markdown_table(result), unsafe_allow_html=True)
@@ -1048,7 +1054,7 @@ def main():
                 
                 if "박스" in ins_mode:
                     judgment_prompt_tab3 += "## 3️⃣-1. [박스(외포장) vs 팩(내포장) 영양정보 1:1 교차 검증]\n"
-                    judgment_prompt_tab3 += "| 영양성분명 (100% 전수 기재) | 타겟(박스) 1개당 표시량 | 비교용(팩) 표시량 | 상세 사유 (<br> 태그 사용) | 판정 |\n|---|---|---|---|---|\n\n"
+                    judgment_prompt_tab3 += "| 영양성분명 (100% 전수 기재) | 타겟(박스) 1개당 표시량 | 비교용(팩) 표시량 | 일치 여부 (<br> 태그 사용) | 판정 |\n|---|---|---|---|---|\n\n"
 
                 if has_any_doc:
                     title_prefix = "3️⃣-2." if "박스" in ins_mode else "3️⃣-1."
