@@ -215,7 +215,7 @@ RULE_BOOK_FULL = """
 
 🔥 **Rule 13. [알레르기 표기 시각적 한계 보완 및 실무 확인 룰]**
    - 알레르기 물질은 원재료명과 바탕색이 구분되는 '별도 란(박스)'에 기재해야 합니다.
-   - **[AI 시각적 한계 보완]**: AI는 이미지의 음영(바탕색) 차이를 정확히 판별하기 어려우므로, 텍스트 스캔 결과 시안에 **'OO 함유'**라는 독립된 문구가 존재한다면 일단 알레르기 표시란 규정을 준수한 것으로 간주하여 **✅(적합)** 처리하십시오.
+   - **[AI 시각적 한계 보완]**: AI는 이미지의 음영(바탕색) 차이를 정확히 판별하기 어려우므로, 텍스트 스캔 결과 시안에 **'OO 함유'**라는 독립 문구가 존재한다면 일단 알레르기 표시란 규정을 준수한 것으로 간주하여 **✅(적합)** 처리하십시오.
    - ⭐ **[강제 출력 원칙]**: 위 경우 판정 사유 끝에 반드시 **"⚠️(실무 확인 권장): 시스템상 'OO 함유' 텍스트 표기는 확인되었으나, 해당 문구의 바탕색이 원재료명 란과 다르게 음영 처리되어 확실히 구분되는지 육안으로 한 번 더 확인해 주십시오."**라는 멘트를 덧붙이십시오.
 
 🔥 **Rule 14. [첨가물 표 4, 5, 6 교차 검증 및 표 6 주용도 합법성]**
@@ -557,7 +557,7 @@ def main():
     st.markdown(print_css, unsafe_allow_html=True)
     
     # ⭐ 상단 고정 헤더 영역 (현재 검토 중인 제품명 표시)
-    st.title("🏭 식품 표시사항 정밀 검토 시스템 (V323.00 - 구글 Context Caching 완벽 적용)")
+    st.title("🏭 식품 표시사항 정밀 검토 시스템 (V324.00 - 표 내부 통합 및 중복 지시 제거 패치)")
     
     current_product = st.session_state.get("current_product_name", "지정되지 않음")
     st.markdown(f"#### 🟢 **현재 검토 중인 제품:** `{current_product}`")
@@ -684,7 +684,7 @@ def main():
                     st.session_state["doc_type_state"] = doc_type
                     st.session_state["inspection_mode_state"] = inspection_mode
                     
-                    # ⭐ [V323.00] 명시적 Context Caching 로직 추가
+                    # ⭐ [V323.00/V324.00] 명시적 Context Caching 로직 추가 및 32K 예외 처리
                     try:
                         # 기존 캐시가 메모리에 있다면 삭제 (충돌 방지)
                         if "qc_cache_name" in st.session_state and st.session_state["qc_cache_name"]:
@@ -705,9 +705,14 @@ def main():
                         st.session_state["qc_cache_name"] = cache.name
                         st.success("✅ 파일 등록 및 구글 서버 캐싱 완료! (향후 2시간 동안 API 비용 90% 절감)")
                     except Exception as e:
-                        st.error(f"🚨 캐싱 실패 (일반 모드로 작동합니다): {e}")
+                        error_msg = str(e)
                         st.session_state["qc_cache_name"] = None
-                        st.success("✅ 파일 등록 완료! (캐싱 없이 진행)")
+                        
+                        # 구글의 32k 토큰 하한선 미달 에러인 경우 부드럽게 안내
+                        if "32768" in error_msg or "too small" in error_msg.lower():
+                            st.success("✅ 파일 등록 완료! (데이터가 가벼워 캐싱 대기 없이 초고속 일반 모드로 진행합니다 ⚡)")
+                        else:
+                            st.warning(f"⚠️ 캐싱을 건너뛰고 일반 모드로 진행합니다. (사유: {error_msg})")
 
     def run_qc_3pass(tab_rules: str, judgment_prompt: str, extract_missions_list: list = None):
         if not st.session_state["uploaded_content"]:
@@ -1117,16 +1122,17 @@ def main():
                 if has_any_doc:
                     title_prefix = "3️⃣-2." if "박스" in ins_mode else "3️⃣-1."
                     judgment_prompt_tab3 += f"## {title_prefix} [영양표시 오차 검증 (다중 성적서 100% 전수 대조 매트릭스)]\n"
-                    judgment_prompt_tab3 += "| 영양성분 | 🧪 성적서 환산값(A) | 📦 시안 표시량(B) | ⚖️ 허용오차 커트라인 | 🎯 상세 사유 (1일 기준치 % 검증 수식 포함, 판정 단어 중복 금지) | 판정 |\n|---|---|---|---|---|---|\n\n"
+                    # ⭐ V324.00: % 병기 대조를 표 안으로 완전히 가둬버리도록 헤더 명칭 초강력 통제
+                    judgment_prompt_tab3 += "| 영양성분 | 🧪 성적서 환산값(A) | 📦 시안 표시량(B) | ⚖️ 허용오차 커트라인 | 🎯 상세 사유 (<br>태그로 '안전율'과 '1일 기준치 % 역산'을 각각 나누어 명시) | 판정 |\n|---|---|---|---|---|---|\n\n"
                 elif "박스" not in ins_mode:
                     judgment_prompt_tab3 += "## 3️⃣-1. [영양표시 오차 검증]\n(※ 성적서 미제출로 실측 오차 검증 생략)\n\n"
 
+                # ⭐ V324.00: 룰 83 중복 지시 완전 삭제
                 judgment_prompt_tab3 += """## 🔍 [영양성분표 치명적 레이아웃 및 꼼수 정밀 검증]
 - ⭐ **[Rule 3 앞뒷면 교차 검증 (강조 영양소 누락 적발)]**: 주표시면이나 기타면에 강조된 영양소(예: 나이아신, 비타민E 등)가 영양정보표 리스트 안에 법적 명칭으로 누락 없이 모두 기재되어 있는지 확인 (누락 시 🚨부적합 처리): 
 - ⭐ [Rule 80] 영양정보표 상단 레이아웃 확인 (총 내용량 폰트 축소 금지 포함): 
 - ⭐ [Rule 81] 하단 2000kcal 면책 문구 토씨 100% 대조: 
 - ⭐ [Rule 82] 영양소 법정 특수 단위/아래첨자 정밀 검증 (μg, α-TE 등): 
-- ⭐ [Rule 83] 기준치 존재 성분 % 병기 룰 대조 (역산 검증):
 - 🔠 **[오탈자 스캔 결과]**: (Pass 1.8 바탕 오탈자만 기재)
 - 📏 **[띄어쓰기 스캔 결과]**: (Pass 1.8 바탕 띄어쓰기만 기재)
 """
