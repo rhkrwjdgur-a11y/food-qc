@@ -14,6 +14,7 @@ import tempfile
 import socket
 import io
 import json
+import datetime  # ⭐ 캐싱 시간 설정을 위한 추가 임포트
 
 # 👇 [네트워크 방어] 파이썬 전체 대기 시간을 10분(600초)으로 연장
 socket.setdefaulttimeout(600)
@@ -556,7 +557,7 @@ def main():
     st.markdown(print_css, unsafe_allow_html=True)
     
     # ⭐ 상단 고정 헤더 영역 (현재 검토 중인 제품명 표시)
-    st.title("🏭 식품 표시사항 정밀 검토 시스템 (V322.00 - API 비용 최적화 및 속도 향상 패치)")
+    st.title("🏭 식품 표시사항 정밀 검토 시스템 (V323.00 - 구글 Context Caching 완벽 적용)")
     
     current_product = st.session_state.get("current_product_name", "지정되지 않음")
     st.markdown(f"#### 🟢 **현재 검토 중인 제품:** `{current_product}`")
@@ -669,8 +670,8 @@ def main():
             return user_content, local_paths
 
         st.markdown("---")
-        if st.button("🚀 전체 시스템 파일 연동 (Vision API 자동 가동)"):
-            with st.spinner("파일을 AI 시스템에 연동 중입니다..."):
+        if st.button("🚀 전체 시스템 파일 연동 및 캐싱 (Vision API 가동)"):
+            with st.spinner("파일을 구글 시스템에 연동하고 메모리에 캐싱(Caching) 중입니다..."):
                 content, paths = get_uploaded_content()
                 if not content:
                      st.warning("⚠️ 업로드된 파일이 없거나 처리할 수 없습니다. 파일을 확인해주세요.")
@@ -683,15 +684,49 @@ def main():
                     st.session_state["doc_type_state"] = doc_type
                     st.session_state["inspection_mode_state"] = inspection_mode
                     
-                    st.success("✅ 파일 등록 완료! 이제 우측 탭에서 검토를 시작하세요.")
+                    # ⭐ [V323.00] 명시적 Context Caching 로직 추가
+                    try:
+                        # 기존 캐시가 메모리에 있다면 삭제 (충돌 방지)
+                        if "qc_cache_name" in st.session_state and st.session_state["qc_cache_name"]:
+                            try:
+                                genai.caching.CachedContent.get(st.session_state["qc_cache_name"]).delete()
+                            except:
+                                pass
+                        
+                        # 룰북과 업로드된 파일들을 통째로 묶어서 캐싱 데이터 생성
+                        cache_contents = content + [f"\n\n========================================\n[식품 QC 마스터 통합 룰북 원문]\n{RULE_BOOK_FULL}"]
+                        cache = genai.caching.CachedContent.create(
+                            model=f"models/{MODEL_NAME}",
+                            display_name="food_qc_cache",
+                            system_instruction=SYSTEM_PROMPT,
+                            contents=cache_contents,
+                            ttl=datetime.timedelta(minutes=120)  # 2시간 동안 메모리 유지
+                        )
+                        st.session_state["qc_cache_name"] = cache.name
+                        st.success("✅ 파일 등록 및 구글 서버 캐싱 완료! (향후 2시간 동안 API 비용 90% 절감)")
+                    except Exception as e:
+                        st.error(f"🚨 캐싱 실패 (일반 모드로 작동합니다): {e}")
+                        st.session_state["qc_cache_name"] = None
+                        st.success("✅ 파일 등록 완료! (캐싱 없이 진행)")
 
     def run_qc_3pass(tab_rules: str, judgment_prompt: str, extract_missions_list: list = None):
         if not st.session_state["uploaded_content"]:
             st.warning("🚨 좌측 사이드바 하단의 [🚀 전체 시스템 파일 연동] 버튼을 먼저 눌러주세요.")
             return None
 
-        content = st.session_state["uploaded_content"]
-        model = genai.GenerativeModel(MODEL_NAME, system_instruction=SYSTEM_PROMPT)
+        # ⭐ [V323.00] 캐시 존재 여부에 따라 모델 로딩 방식 분기
+        use_cache = False
+        cache_name = st.session_state.get("qc_cache_name")
+        if cache_name:
+            try:
+                cache = genai.caching.CachedContent.get(cache_name)
+                model_pro = genai.GenerativeModel.from_cached_content(cached_content=cache)
+                use_cache = True
+            except:
+                model_pro = genai.GenerativeModel(MODEL_NAME, system_instruction=SYSTEM_PROMPT)
+        else:
+            model_pro = genai.GenerativeModel(MODEL_NAME, system_instruction=SYSTEM_PROMPT)
+
         generation_config = genai.types.GenerationConfig(temperature=0.0, max_output_tokens=65536)
         safety_settings = [
             {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_NONE"},
@@ -699,6 +734,14 @@ def main():
             {"category": "HARM_CATEGORY_SEXUALLY_EXPLICIT", "threshold": "BLOCK_NONE"},
             {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_NONE"}
         ]
+
+        def get_payload(prompt_text):
+            if use_cache:
+                # 캐시를 사용할 때는 이미 프롬프트 앞부분(이미지+룰북)이 메모리에 있으므로 질문만 보냄
+                return [prompt_text]
+            else:
+                # 캐시 실패 시 매번 전체 데이터를 새로 전송 (무거움)
+                return st.session_state["uploaded_content"] + [f"========================================\n[식품 QC 마스터 통합 룰북 원문]\n{RULE_BOOK_FULL}"] + [prompt_text]
 
         extracted_text_combined = ""
         pass18_result = "맞춤법 전용 스캔 생략됨 (본 탭은 추출 미션 없음)"
@@ -717,8 +760,8 @@ def main():
                 max_retries = 3
                 for attempt in range(max_retries):
                     try:
-                        pass1_response = model.generate_content(
-                            content + [pass1_prompt], 
+                        pass1_response = model_pro.generate_content(
+                            get_payload(pass1_prompt), 
                             generation_config=generation_config, 
                             safety_settings=safety_settings, 
                             request_options={"timeout": 600}
@@ -751,8 +794,8 @@ def main():
             verified_text = extracted_text_combined
             for attempt in range(max_retries):
                 try:
-                    pass15_response = model.generate_content(
-                        content + [pass15_prompt], 
+                    pass15_response = model_pro.generate_content(
+                        get_payload(pass15_prompt), 
                         generation_config=generation_config, 
                         safety_settings=safety_settings, 
                         request_options={"timeout": 600}
@@ -780,10 +823,10 @@ def main():
             for attempt in range(max_retries):
                 try:
                     # 💡 [최적화 V322.00] Pass 1.8은 무거운 이미지가 불필요하므로 content를 빼고 텍스트만 전송.
-                    # 또한 저렴하고 빠른 flash 모델을 사용하여 비용 90% 이상 절감 및 속도 대폭 상향.
-                    model_flash = genai.GenerativeModel(MODEL_NAME_FLASH)
+                    # 또한 저렴하고 빠른 flash 모델을 사용하여 비용 90% 이상 절감 및 속도 대폭 상향. (캐시 무관)
+                    model_flash = genai.GenerativeModel(MODEL_NAME_FLASH, system_instruction=SYSTEM_PROMPT)
                     pass18_response = model_flash.generate_content(
-                        f"{pass15_prompt}\n\n{pass18_prompt}", # content 배제 (이미지 안 보냄)
+                        [pass15_prompt + "\n\n" + pass18_prompt], # 오직 텍스트만 전송
                         generation_config=generation_config, 
                         safety_settings=safety_settings, 
                         request_options={"timeout": 600}
@@ -843,8 +886,8 @@ def main():
 """
         for attempt in range(3):
             try:
-                pass2_response = model.generate_content(
-                    content + [pass2_prompt], 
+                pass2_response = model_pro.generate_content(
+                    get_payload(pass2_prompt), 
                     generation_config=generation_config, 
                     safety_settings=safety_settings, 
                     request_options={"timeout": 600}
@@ -864,14 +907,29 @@ def main():
     def run_qc_model(prompt_text):
         if not st.session_state["uploaded_content"]:
             return None
-        model = genai.GenerativeModel(MODEL_NAME, system_instruction=SYSTEM_PROMPT)
+            
         generation_config = genai.types.GenerationConfig(temperature=0.0, max_output_tokens=65536)
-        full_prompt = f"""
+        
+        dynamic_prompt = f"""
         [제품유형]: {product_type}\n[검토모드]: {inspection_mode}\n[우리 공장 알레르기 마스터 목록]: {factory_allergens}
-        {RULE_BOOK_FULL}\n========================================\n{prompt_text}
+        ========================================\n{prompt_text}
         """
+        
+        cache_name = st.session_state.get("qc_cache_name")
+        if cache_name:
+            try:
+                cache = genai.caching.CachedContent.get(cache_name)
+                model = genai.GenerativeModel.from_cached_content(cached_content=cache)
+                payload = [dynamic_prompt]
+            except:
+                model = genai.GenerativeModel(MODEL_NAME, system_instruction=SYSTEM_PROMPT)
+                payload = st.session_state["uploaded_content"] + [f"[식품 QC 마스터 룰북]\n{RULE_BOOK_FULL}"] + [dynamic_prompt]
+        else:
+            model = genai.GenerativeModel(MODEL_NAME, system_instruction=SYSTEM_PROMPT)
+            payload = st.session_state["uploaded_content"] + [f"[식품 QC 마스터 룰북]\n{RULE_BOOK_FULL}"] + [dynamic_prompt]
+            
         try:
-            response = model.generate_content(st.session_state["uploaded_content"] + [full_prompt], generation_config=generation_config)
+            response = model.generate_content(payload, generation_config=generation_config)
             return fix_markdown_table(get_safe_text(response))
         except Exception as e:
             return f"🚨 시스템 런타임 오류 발생: {e}"
@@ -1054,7 +1112,7 @@ def main():
                 
                 if "박스" in ins_mode:
                     judgment_prompt_tab3 += "## 3️⃣-1. [박스(외포장) vs 팩(내포장) 영양정보 1:1 교차 검증]\n"
-                    judgment_prompt_tab3 += "| 영양성분명 (100% 전수 기재) | 타겟(박스) 1개당 표시량 | 비교용(팩) 표시량 | 일치 여부 (<br> 태그 사용) | 판정 |\n|---|---|---|---|---|\n\n"
+                    judgment_prompt_tab3 += "| 영양성분명 (100% 전수 기재) | 타겟(박스) 1개당 표시량 | 비교용(팩) 표시량 | 상세 사유 (<br> 태그 사용) | 판정 |\n|---|---|---|---|---|\n\n"
 
                 if has_any_doc:
                     title_prefix = "3️⃣-2." if "박스" in ins_mode else "3️⃣-1."
