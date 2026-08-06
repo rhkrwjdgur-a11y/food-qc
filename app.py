@@ -73,9 +73,9 @@ else:
 
 genai.configure(api_key=API_KEY)
 
-# ⭐ [최신 모델 라인업 적용]
-MODEL_NAME = "gemini-1.5-pro"
-MODEL_NAME_FLASH = "gemini-1.5-flash"
+# ⭐ [2026-08 기준 최신 모델 라인업 적용]
+MODEL_NAME = "gemini-3.6-flash"
+MODEL_NAME_FLASH = "gemini-3.5-flash-lite"
 
 def get_safe_text(response):
     try:
