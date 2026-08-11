@@ -99,15 +99,11 @@ def get_safe_text(response):
     except Exception as e:
         return f"🚨 [시스템 추출 오류] 모델 응답을 읽어오는 중 에러 발생: {e}"
 
+# 💡 [근본 해결 3-1: 조잡한 한글 정규식 제거] 표의 헤더와 구분선 앞뒤로 범용적인 줄바꿈 강제 삽입
 def fix_markdown_table(text):
-    text = re.sub(r'([^\n])\s*(\|\s*No\s*\|)', r'\1\n\n\2', text)
-    text = re.sub(r'([^\n])\s*(\|\s*시안 원재료명\s*\|)', r'\1\n\n\2', text)
-    text = re.sub(r'([^\n])\s*(\|\s*팩\(내포장\)\s*\|)', r'\1\n\n\2', text)
-    text = re.sub(r'([^\n])\s*(\|\s*서류 매칭 원료\s*\|)', r'\1\n\n\2', text)
-    text = re.sub(r'([^\n])\s*(\|\s*영양성분명\s*\|)', r'\1\n\n\2', text)
-    text = re.sub(r'\|\s+\|', '|\n|', text)
     text = re.sub(r'([^\n])\n(\|)', r'\1\n\n\2', text)
     text = re.sub(r'\|\n\n\|', '|\n|', text)
+    text = re.sub(r'([^\n])\s*(\|\s*---|\|\s*:)', r'\1\n\n\2', text)
     return text
 
 # ==========================================
@@ -503,7 +499,7 @@ RULE_BOOK_FULL = """
    - 시안에 '당류가공품' 등이 있는데 서류 명칭과 글자가 다르다고 무조건 누락(🚨부적합) 처리하지 마십시오. 서류의 비고란이나 하위 전개 성분을 논리적으로 추론하여 시안의 범용 명칭과 유연하게 매칭(맵핑)하고 ✅적합 처리하십시오.
 
 **Rule 91. ['혼합제제' 명칭 단축 표기 절대 합법성]**
-   - 서류상에 '식품첨가물혼합제제'나 고유명칭(예: 비타민미네랄혼합제제)으로 기재되어 있더라도, 패키지 시안에 단순히 '혼합제제'라고만 줄여서 표기하는 것은 실무상 완벽한 합법(✅)입니다. 이를 두고 규정 위반이나 명칭 축약 오류라며 🚨부적합 처리하지 마십시오.
+   - 서류상에 '식품첨가물혼합제제'나 고유명칭(예: 비타민미네랄혼합제제)으로 기재되어 있더라도, 패키지 시안에 단순히 '혼합제제'라고만 줄여서 표기하는 실무상 완벽한 합법(✅)입니다. 이를 두고 규정 위반이나 명칭 축약 오류라며 🚨부적합 처리하지 마십시오.
 
 **Rule 92. [부분 캡처 이미지 한계에 따른 누락 항목 조건부 보류 룰]**
    - 사용자가 업로드한 이미지는 패키지의 특정 구역만 자른 부분 이미지일 수 있습니다. 따라서 '식품유형', '반품/교환처', '소비자상담실', '1399 신고문구' 등의 일반/행정 정보가 현재 검토 중인 이미지에서 보이지 않는다고 해서 즉시 🚨부적합(누락) 판정을 내리지 마십시오.
@@ -559,11 +555,18 @@ def get_sliced_rules(rule_numbers):
         rules.append("\n".join(current_rule))
     return "\n\n".join(rules)
 
-ALL_RULES_NUMBERS = list(range(1, 100))
-RULES_TAB1 = "[탭 1. 주표시면 관련 핵심 룰]\n" + get_sliced_rules(ALL_RULES_NUMBERS)
-RULES_TAB2 = "[탭 2. 정보표시면/원재료명 관련 핵심 룰]\n" + get_sliced_rules(ALL_RULES_NUMBERS)
-RULES_TAB3 = "[탭 3. 영양성분표 관련 핵심 룰]\n" + get_sliced_rules(ALL_RULES_NUMBERS)
-RULES_TAB4 = "[탭 4. 기타면/측면 관련 핵심 룰]\n" + get_sliced_rules(ALL_RULES_NUMBERS)
+# ==========================================
+# 💡 [근본 해결 2: AI 집중력 향상을 위한 탭별 룰 슬라이싱]
+# ==========================================
+TAB1_RULES = [3, 9, 17, 19, 21, 46, 50, 52, 53, 57, 62, 63, 68, 71, 72, 84, 86, 87, 88, 94, 95, 96, 99]
+TAB2_RULES = [1, 2, 4, 5, 8, 9, 12, 13, 14, 16, 28, 29, 30, 34, 35, 38, 39, 44, 45, 47, 48, 51, 53, 54, 60, 61, 64, 65, 70, 85, 89, 90, 91, 95]
+TAB3_RULES = [3, 6, 10, 11, 23, 24, 25, 26, 27, 31, 32, 33, 40, 41, 55, 68, 79, 80, 82, 83, 97, 98]
+TAB4_RULES = [7, 15, 20, 22, 36, 58, 59, 73, 74, 75, 76, 77, 78, 81, 92, 93]
+
+RULES_TAB1 = "[탭 1. 주표시면 관련 핵심 룰]\n" + get_sliced_rules(TAB1_RULES)
+RULES_TAB2 = "[탭 2. 정보표시면/원재료명 관련 핵심 룰]\n" + get_sliced_rules(TAB2_RULES)
+RULES_TAB3 = "[탭 3. 영양성분표 관련 핵심 룰]\n" + get_sliced_rules(TAB3_RULES)
+RULES_TAB4 = "[탭 4. 기타면/측면 관련 핵심 룰]\n" + get_sliced_rules(TAB4_RULES)
 
 # ==========================================
 # 메인 앱 로직
@@ -596,7 +599,7 @@ def main():
     """
     st.markdown(print_css, unsafe_allow_html=True)
     
-    st.title("식품 표시사항 정밀 검토 시스템 (V350.4)")
+    st.title("식품 표시사항 정밀 검토 시스템 (V350.6 Master)")
     
     current_product = st.session_state.get("current_product_name", "지정되지 않음")
     st.markdown(f"#### **현재 검토 중인 제품:** `{current_product}`")
@@ -611,7 +614,7 @@ def main():
         if product_input:
             st.session_state["current_product_name"] = product_input
 
-        # 상태값(key) 연동 패치
+        # 상태값(key) 연동
         product_type = st.radio("식품유형", ("일반식품", "특수의료용도식품", "축산물"), key="product_type")
         inspection_mode = st.radio("검토 모드", ("단품 기본 검토", "선물세트 교차 검토"), key="inspection_mode")
         doc_type = st.radio("증빙 서류 형태", ("통합 엑셀/PDF", "개별 한글라벨"), key="doc_type")
@@ -658,7 +661,6 @@ def main():
 
         st.markdown("---")
 
-        # 파일 업로드 병렬 처리 로직
         def get_uploaded_content():
             uploaded_items = []
             local_paths = []
@@ -686,6 +688,13 @@ def main():
             def upload_worker(idx, task):
                 file_path, label = task
                 content_parts = [f"### [{label}] ###"]
+
+                # 💡 [근본 해결 1: Vision API 부활] 이미지일 경우 구글 비전 API로 텍스트 강제 추출하여 주입
+                if file_path.lower().endswith(('.png', '.jpg', '.jpeg')):
+                    ocr_text = extract_text_with_vision(file_path)
+                    if not ocr_text.startswith("[시스템 알림]"):
+                        content_parts.append(f"\n[Vision API 정밀 스캔 텍스트 원본]:\n{ocr_text}\n")
+
                 for attempt in range(3):
                     try:
                         up = genai.upload_file(file_path)
@@ -766,7 +775,7 @@ def main():
         verified_text = ""
 
         # ==========================================
-        # Pass 1 (미션 분할 병렬 추출)
+        # Pass 1 (미션 분할 순차 추출 - 429 과부하 원천 차단)
         # ==========================================
         if extract_missions_list:
             t_pass1_start = time.time()
@@ -779,23 +788,19 @@ def main():
                         resp = model_pro.generate_content(get_payload(pass1_prompt), generation_config=generation_config, safety_settings=safety_settings)
                         return idx, get_safe_text(resp), None
                     except Exception as e:
-                        if "429" in str(e): # 429 에러(속도 제한) 디버깅용 메시지
-                            print(f"[디버그] 미션 {idx+1}에서 429 에러 발생 (재시도 중...)")
-                        if attempt < 2: time.sleep(10); continue
+                        if attempt < 2: time.sleep(5); continue # 에러 시 5초 대기
                         return idx, None, str(e)
 
-            with ThreadPoolExecutor(max_workers=3) as executor:
-                futures = [executor.submit(run_single_mission, i, m) for i, m in enumerate(extract_missions_list)]
-                for future in as_completed(futures):
-                    idx, text, err = future.result()
-                    if err: extracted_results[idx] = f"[오류 - 미션 {idx+1}]: {err}"
-                    else: extracted_results[idx] = text
+            # 💡 [근본 해결 2: 병렬 처리 제거] 무조건 1개씩 순차 실행하여 트래픽 과부하 방지
+            for i, m in enumerate(extract_missions_list):
+                idx, text, err = run_single_mission(i, m)
+                if err: extracted_results[idx] = f"[오류 - 미션 {idx+1}]: {err}"
+                else: extracted_results[idx] = text
+                time.sleep(2) # 안정성 극대화
             
             extracted_text_combined = "\n\n".join([res for res in extracted_results if res is not None])
             t_pass1_elapsed = time.time() - t_pass1_start
-            
-            # UI에 Pass 1 시간 찍기
-            st.info(f"[시스템 로그] Pass 1 (미션 {len(extract_missions_list)}개 동시 추출) 소요시간: {t_pass1_elapsed:.1f}초")
+            st.info(f"[시스템 로그] Pass 1 (미션 {len(extract_missions_list)}개 순차 추출) 소요시간: {t_pass1_elapsed:.1f}초")
 
             # ==========================================
             # Pass 1.5 & Pass 1.8 (병렬 실행)
@@ -830,9 +835,11 @@ def main():
         # ==========================================
         t_pass2_start = time.time()
         pass2_context = f"\n[정제본]\n{verified_text}\n[맞춤법 결과]\n{pass18_result}\n" if extract_missions_list else ""
+        
+        # [다단 표 복구 및 타 탭 침범 방지 패치 + 빈 줄 강제]
         pass2_prompt = f"""
 [PASS 2 - 룰 판정 전용 명령]
-[시스템 현재 날짜 및 기준 연도]: {current_date} (현재가 {current_year}년임을 절대 잊지 마십시오.)
+[시스템 현재 날짜 및 기준 연도]: {current_date}
 [제품유형]: {st.session_state.get("product_type", "일반식품")}
 [검토모드]: {st.session_state.get("inspection_mode", "단품")}
 [증빙서류 형태]: {st.session_state.get("doc_type", "통합 엑셀/PDF")}
@@ -840,17 +847,21 @@ def main():
 {tab_rules}
 {pass2_context}
 
-🛑 [최고 수준 경고: 영역 침범 및 과잉 생성(오지랖) 절대 금지] 🛑
-당신은 현재 요청받은 특정 탭(Tab)의 뼈대만 채우는 '국소적 표 생성기'입니다.
-업로드된 모든 이미지를 다 볼 수 있더라도, 절대로 묻지 않은 다른 영역의 내용(예: 종합 결론, 원재료 1:1 대조표, 영양성분 계산표 등)을 임의로 창조하여 표 밑에 덧붙이지 마십시오. 
-오직 아래 제시된 [출력 양식]의 표만 딱 완성한 후, 단 한 줄의 부연 설명이나 꼬리말도 없이 그 즉시 출력을 강제 종료(Stop)하십시오. (어길 시 치명적 에러 간주)
+🛑 [최고 수준 경고: 영역 침범 및 과잉 생성 절대 금지] 🛑
+당신은 현재 요청받은 특정 탭(Tab)의 [출력 양식] 뼈대만 정확히 채워 넣는 시스템입니다.
+절대로 묻지 않은 다른 영역의 내용을 임의로 창조하여 덧붙이지 마십시오. 
+오직 아래 제시된 [출력 양식]의 뼈대(사전 연산 질문, 체크리스트, 마크다운 표 등)를 누락 없이 100% 순서대로 채워 넣으십시오.
+★특히 '표'만 단독으로 출력하고 '사전 연산' 단계를 임의로 삭제/생략하면 치명적인 시스템 오류로 간주합니다.★
+
+💡 [마크다운 표 렌더링 절대 규칙 (표 깨짐 방지)]: 
+표(Table)를 그리기 직전과 직후에는 반드시 **엔터키(빈 줄)를 2번** 이상 입력하여, 일반 텍스트와 표가 절대 위아래로 달라붙지 않도록 격리하십시오.
 
 [가독성 향상 HTML 강제 명령]:
 판정 및 사유 칼럼의 텍스트가 줄글로 뭉쳐지면 실무자가 읽기 매우 힘듭니다.
-반드시 **<br>** 태그를 적극 사용하여 줄바꿈을 하고, **볼드체**를 활용하여 직관적으로 요약 작성하십시오.
+반드시 **<br>** 태그를 적극 사용하여 줄바꿈을 하고, **볼드체**를 활용하십시오.
 
 [출력 양식] 
-아래 뼈대만 복사하고 내용을 채울 것. (생략 금지)
+아래 뼈대만 복사하고 내용을 채울 것. (생략 절대 금지)
 {judgment_prompt}
 """
         final_clean_text = "[Pass 2 에러]"
@@ -864,7 +875,7 @@ def main():
                 final_clean_text = f"[Pass 2 최종 오류]: {e}"
         
         t_pass2_elapsed = time.time() - t_pass2_start
-        st.info(f"[시스템 로그] Pass 2 (최종 표 작성/판정 - 병렬불가 구간) 소요시간: {t_pass2_elapsed:.1f}초")
+        st.info(f"[시스템 로그] Pass 2 (최종 표 작성/판정) 소요시간: {t_pass2_elapsed:.1f}초")
         
         t_tab_total = time.time() - t_tab_start
         st.success(f"해당 탭 연산 완료! (총 소요시간: {t_tab_total:.1f}초)")
@@ -880,7 +891,7 @@ def main():
         generation_config = genai.types.GenerationConfig(temperature=0.0, max_output_tokens=65536)
         
         dynamic_prompt = f"""
-        [시스템 현재 날짜 및 기준 연도]: {current_date} (현재가 {current_year}년임을 절대 잊지 마십시오.)
+        [시스템 현재 날짜 및 기준 연도]: {current_date}
         [제품유형]: {st.session_state.get("product_type", "일반식품")}\n[검토모드]: {st.session_state.get("inspection_mode", "단품")}\n[우리 공장 알레르기 마스터 목록]: {st.session_state.get("factory_allergens", "")}
         ========================================\n{prompt_text}
         """
@@ -1140,25 +1151,26 @@ def main():
 
     with tab5:
         if st.button("AI 법무팀장 자유 스캔 시작", key="btn_law"):
-            with st.spinner("AI 법률 엔진 가동: 표시광고법 및 판례 기반 심층 스캔 중..."):
-                free_style_prompt = """## 5. [AI 법무팀장 특별 감사 리포트 (자율 심층 스캔)]
-당신은 대한민국 최고의 식품 전문 변호사이자 규제 당국(식약처)의 깐깐한 심사관입니다.
+            with st.spinner("AI 법률 엔진 가동: 법령 PDF 기반 심층 스캔 중... (이 과정은 고도의 추론이 필요하여 시간이 다소 소요될 수 있습니다)"):
+                free_style_prompt = """## 5. [AI 법무팀장 특별 감사 리포트 (심층 법률·마케팅 스캔)]
+당신은 대한민국 최고의 식품 전문 변호사이자 규제 당국(식약처)의 가장 깐깐한 심사관입니다.
+이 작업은 속도보다 **'극도의 정확성과 꼼꼼함'**이 훨씬 중요합니다. 업로드된 「식품등의 표시·광고에 관한 법률」, 시행령, 시행규칙, 부당광고 고시 등 법령 PDF 원문 데이터를 샅샅이 뒤져서, 기존 기계적 룰이 놓칠 수 있는 '문맥상의 위법성', '소비자 기만 가능성', '과대광고' 리스크를 영혼까지 끌어모아 찾아내십시오.
 
-🛑 [절대 주의사항: 타 부서 영역 침범 금지] 🛑
-- 단순 오탈자(예: 유유 -> 우유), 띄어쓰기, 영양성분 수치 계산 오류(콜레스테롤 오차 등)는 다른 부서(탭 1~3)에서 이미 모두 적발했습니다.
-- 이 5번 탭에서는 **절대로 단순 오탈자나 수치 계산 오류를 중복으로 지적하지 마십시오.** (발견하더라도 철저히 무시하십시오)
-- 오직 패키지의 **'마케팅 문구', '디자인', '강조 표시(예: 저지방, 100% 등)'**가 식품표시광고법상 기만행위나 과대광고에 해당하는지만 심층 분석하십시오.
+🛑 [절대 주의사항: 타 부서 영역 침범 금지]
+단순 오탈자, 띄어쓰기, 영양성분 단순 오차 계산 등은 절대 언급하지 마십시오. 오직 '마케팅 기만'과 '법률 위반(표시광고법)'에만 집중하십시오.
 
-[절대 명령]: 반드시 아래 두 가지 파트로 나누어 리포트를 작성하십시오.
+[절대 명령]: 반드시 아래 **두 가지 챕터**로 나누어, 매우 구체적인 법적 근거를 들어 리포트를 작성하십시오.
 
-### 1. 🎯 [마케팅 소구점 및 소비자 오인 분석]
-- 패키지 전반에 걸친 마케팅/디자인 강조 문구("저지방", "100%", 유기농 표방, 특정 타겟층 명시 등)를 심층 스캔하십시오.
-- 해당 마케팅 문구가 소비자를 기만하거나 오인하게 할 여지가 없는지 통찰력 있게 분석하여 줄글로 서술하십시오.
+### 챕터 1. 🎯 [마케팅적 문구 분석 (소비자 기만 및 오인 스캔)]
+- 패키지 전반에 걸친 마케팅/디자인 강조 문구("1위", "최초", "무첨가", "100%", "천연", "프리미엄", 유기농 표방, 영유아 등 특정 타겟층 명시 등)를 심층 스캔하십시오.
+- 해당 문구가 뒷면의 '원재료명'이나 '영양성분표'의 실제 팩트와 교차 검증했을 때, 모순되거나 소비자를 기만/착각하게 할 0.1%의 여지라도 없는지 날카롭게 분석하여 서술하십시오.
+- 숨겨진 꼼수(예: 무보존료라고 썼지만 대체 화학첨가물을 쓴 경우, 과일 이미지를 썼는데 실제 과즙은 극미량인 경우 등)를 파헤치십시오.
 
-### 2. ⚖️ [표시광고법 및 규제 위반 리스크 스캔]
-- 질병 예방/치료 효능 표방, 건강기능식품 오인, 거짓/과장 광고 등 법적 철퇴를 맞을 수 있는 리스크를 찾아내 표로 브리핑하십시오. (리스크가 없으면 '특이사항 없음'으로 출력)
+### 챕터 2. ⚖️ [법률적 문구 분석 (표시광고법 위반 리스크 스캔)]
+- 제공된 법령 PDF(특히 식품표시광고법 제8조 부당한 표시·광고행위의 금지, 부당광고 고시 등)를 기반으로, 질병 예방/치료 효능 표방, 건강기능식품 오인, 신체조직 기능 표방, 타사 비방, 객관적 근거 없는 비교 광고 등 법적 철퇴를 맞을 수 있는 리스크를 전수 조사하십시오.
+- 🛑 [표 생성 강제 명령]: 챕터 2의 결과는 반드시 아래 마크다운 표 뼈대를 100% 그대로 복사하여 내용을 채우십시오. 줄글 형태로 나열하는 것을 절대 금지합니다. (리스크가 전혀 없더라도 표를 지우지 말고 첫 칸에 '특이사항 없음'으로 표기하십시오.)
 
-| 적발된 리스크 (Risk) | 발견 위치 및 문구 | 관련 법령 및 판정 근거 (상세 사유) | 방어 및 수정 제안 |
+| 적발된 리스크 (Risk) | 발견 위치 및 문구 | 관련 법령 원문 및 판정 근거 (상세 사유) | 방어 및 수정 제안 |
 |---|---|---|---|
 """
                 st.session_state["result_tab5"] = run_qc_model(free_style_prompt)
