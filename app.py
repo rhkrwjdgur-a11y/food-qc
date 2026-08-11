@@ -75,8 +75,8 @@ else:
 genai.configure(api_key=API_KEY)
 
 # 최고급 Pro 모델 유지 및 Flash 모델 맵핑
-MODEL_NAME = "gemini-2.5-pro"
-MODEL_NAME_FLASH = "gemini-2.5-flash"
+MODEL_NAME = "gemini-3.6-flash"
+MODEL_NAME_FLASH = "gemini-3.5-flash-lite"
 
 def get_safe_text(response):
     try:
