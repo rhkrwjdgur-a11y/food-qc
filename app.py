@@ -99,7 +99,7 @@ def get_safe_text(response):
     except Exception as e:
         return f"🚨 [시스템 추출 오류] 모델 응답을 읽어오는 중 에러 발생: {e}"
 
-# 💡 [표 깨짐 완벽 방어 정규식 전면 교체] 
+# 💡 [표 깨짐 완벽 방어 정규식] 
 def fix_markdown_table(text):
     # 1. 텍스트와 표 헤더가 붙어있을 경우 띄어줌 (표 렌더링 인식 오류 방지)
     text = re.sub(r'([^\n|])\s*\n(\s*\|.*\|)\s*\n(\s*\|[\-\s:|]+\|)', r'\1\n\n\2\n\3', text)
@@ -188,7 +188,7 @@ RULE_BOOK_FULL = """
    - [순위 추론]: 시안(포장지)에 나열된 원재료의 텍스트 순서 자체가 '중량순(Rank A)'이라고 100% 신뢰하고 가정하라. 이를 바탕으로 Rule 28에 따른 원산지 타겟(Rank B 1~3위)을 스스로 소거법으로 도출하여 원산지 표시 여부를 깐깐하게 대조하라.
    - [2% / 5% 룰 유연화]: 정확한 %를 알 수 없으므로, 나열 순서에 대한 지적(Rule 34)은 무조건 합법(✅)으로 간주하라. 복합원재료 전개 생략(Rule 5)의 경우 부적합 처리하지 말고 "배합비 5% 미만 조건에 의한 합법적 생략인지 실무자 확인 요망"이라며 ⚠️(확인 요망) 처리하라.
 
-**Rule 5. [복합원재료 5% 미만 전개 면 면제 및 혼합제제 절대 예외 룰]**
+**Rule 5. [복합원재료 5% 미만 전개 면제 및 혼합제제 절대 예외 룰]**
    - [대원칙]: 배합비 5% 미만인 '복합원재료(일반 가공식품)'는 괄호를 열고 하위 성분을 전개할 의무가 아예 없습니다. 생략 합법(✅).
    - [첨가물 과잉 단속 금지 원칙]: 위 조건에 따라, 5% 미만 '일반 복합원재료' 내부에 [표 4, 5, 6] 소속 식품첨가물이 들어있더라도 명칭/용도 표시 의무가 완전히 면제됩니다.
    - [혼합제제 절대 면제 불가 - Rule 44와 연계]: 서류상 식품유형이 '혼합제제'인 원료는 이 5% 미만 면제 룰이 절대로 적용되지 않습니다. 혼합제제의 하위 성분을 검사할 때는 이 Rule 5를 완전히 머릿속에서 지우고, 무조건 Rule 44로 넘어가서 [표 4, 5, 6] 기준에 따라 첨가물 용도 표시 여부를 깐깐하게 따지십시오. "5% 미만 혼합제제이므로 용도 표시 면제"라고 판정하면 치명적인 시스템 오류입니다.
@@ -600,7 +600,7 @@ def main():
     """
     st.markdown(print_css, unsafe_allow_html=True)
     
-    st.title("식품 표시사항 정밀 검토 시스템 (V350.6 Master)")
+    st.title("식품 표시사항 정밀 검토 시스템 (V350.8 Master)")
     
     current_product = st.session_state.get("current_product_name", "지정되지 않음")
     st.markdown(f"#### **현재 검토 중인 제품:** `{current_product}`")
@@ -1073,7 +1073,7 @@ def main():
                 st.session_state["result_tab2"] = run_qc_3pass(tab2_special_rules, judgment_prompt, missions)
         display_result(st.session_state["result_tab2"], "정보표시면")
 
-with tab3:
+    with tab3:
         if st.button("영양성분표 수치 자동 환산 및 대조", key="btn_nutri"):
             with st.spinner("영양성분 수치 역산 및 오차 매트릭스 검증 중..."):
                 has_recipe = st.session_state.get("has_recipe", False)
