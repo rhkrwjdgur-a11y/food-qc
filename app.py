@@ -1103,35 +1103,35 @@ def main():
                     judgment_prompt_tab3 += "## 3-1. [내외포장 영양성분표 1:1 대조 (절대 생략 금지)]\n"
                     judgment_prompt_tab3 += "| 영양성분명 | 타겟(박스) 1개당 시안 | 비교용(팩) 1개당 시안 | 상세 사유 (타이포그래피 차이는 합법 처리) | 판정 |\n|---|---|---|---|---|\n\n"
                 
-                if has_any_doc:
+               if has_any_doc:
                     title_prefix = "3-3." if "선물세트" in ins_mode else "3-2."
                     
                     judgment_prompt_tab3 += "<pre_calc>\n"
-                    judgment_prompt_tab3 += f"## {title_prefix} [사전 연산: 생성해야 할 표 목록 확정 (절대 생략 금지)]\n"
-                    judgment_prompt_tab3 += "[절대 명령]: 영양정보표 시안에 '1컵당'과 '총 내용량당'처럼 단위가 2개 이상 나란히 병기되어 있다면, 절대로 하나만 검사하고 끝내지 마십시오! 반드시 각각의 단위에 대해 독립된 표를 모두 생성하여 이중 검증해야 합니다.\n\n"
-                    judgment_prompt_tab3 += "1. **시안에 존재하는 '맛/종류' 목록**: (실제 이름을 그대로 나열. 예시가 아니라 시안에 적힌 텍스트 그대로. 1개뿐이면 1개만 적을 것)\n"
-                    judgment_prompt_tab3 += "2. **각 맛마다 실제로 병기된 '표시 단위' 개수 및 명칭**: (예: '1컵(80g)당' 1개, '총 내용량(320g)당' 1개 -> 총 2개 단위 확인됨)\n"
-                    judgment_prompt_tab3 += "3. **[생성해야 할 표 목록]**: (맛 × 단위 조합을 하나씩 번호 매겨 전부 나열하라. 단위가 2개면 표도 무조건 2개 나와야 한다.)\n"
+                    judgment_prompt_tab3 += f"## {title_prefix} [사전 연산 1: 다단 표(단위) 기둥 개수 강제 파악]\n"
+                    judgment_prompt_tab3 += "[절대 명령]: 시안 영양정보표에 숫자가 적힌 기둥(컬럼)이 몇 개인지 육안으로 스캔하십시오. '1컵당'과 '총 내용량당'처럼 2개의 기둥이 있다면 반드시 각각 분리해서 검증해야 합니다.\n"
+                    judgment_prompt_tab3 += "1. 시안에 나란히 병기된 표시 단위(기둥)를 모두 쓰시오 (예: 1컵(80g)당, 총 내용량(320g)당): [ ]\n"
+                    judgment_prompt_tab3 += "2. 시안에 존재하는 맛/종류를 모두 쓰시오: [ ]\n"
+                    judgment_prompt_tab3 += "3. [생성해야 할 표 목록] (맛 개수 × 단위 개수만큼 전부 나열): \n"
                     judgment_prompt_tab3 += "   - 표 1: [맛A] - [단위1]\n"
                     judgment_prompt_tab3 += "   - 표 2: [맛A] - [단위2]\n"
-                    judgment_prompt_tab3 += "   - ... (실제 개수만큼 계속)\n"
-                    judgment_prompt_tab3 += "4. **[총 표 개수 확정]**: 위에서 나열한 줄 수 = **N개**\n"
+                    judgment_prompt_tab3 += "4. [총 표 개수 확정]: 위에서 나열한 줄 수 = **N개**\n\n"
+                    
+                    judgment_prompt_tab3 += f"## [사전 연산 2: 영양성분 수치 역산 스크래치패드]\n"
+                    judgment_prompt_tab3 += "(이곳에 1일 기준치 % 및 성적서 환산치에 대한 모든 수학적 계산 과정을 자유롭게 작성하여 정확도를 높이십시오. 단, 위 1번에서 파악한 '총 내용량당' 수치에 대한 환산 및 오차 계산도 절대로 누락하지 말고 반드시 함께 수행하십시오.)\n"
                     judgment_prompt_tab3 += "</pre_calc>\n\n"
 
                     judgment_prompt_tab3 += "## [영양표시 오차 검증 매트릭스]\n"
-                    judgment_prompt_tab3 += "[절대 명령]: 위 3번 목록에 적힌 순서 그대로, 목록에 있는 항목 이름을 표 제목에 그대로 복사하여 정확히 N개의 표를 만들어라.\n"
-                    judgment_prompt_tab3 += "- 목록에 있는 표를 하나라도 빠뜨리면 안 된다. (특히 '총 내용량당' 표를 생략하면 치명적 오류 간주)\n"
-                    judgment_prompt_tab3 += "- '총 내용량당' 수치 검증 시, 1회 섭취량 표기량에 배수(xN)를 곱하는 꼼수를 절대 쓰지 말고, 반드시 성적서(100g당) 실측값을 기준으로 총 내용량(총 중량) 비율에 맞게 재산출할 것.\n\n"
+                    judgment_prompt_tab3 += "🛑 [절대 명령]: 위 사전 연산 1에서 확정한 'N개'의 개수만큼 아래 마크다운 표 뼈대를 완벽하게 반복해서 생성하십시오. '총 내용량당' 표를 렌더링하지 않고 누락하면 치명적 시스템 오류로 간주합니다.\n\n"
 
                     judgment_prompt_tab3 += "### [표 순번] [목록에서 그대로 가져온 맛-단위 이름]\n"
                     judgment_prompt_tab3 += "| 영양성분 | 성적서 환산값(A) | 시안 표시량(B) | 허용오차 커트라인 | 1일 기준치 % 검증 | 상세 사유 | 판정 |\n|---|---|---|---|---|---|---|\n\n"
-                    judgment_prompt_tab3 += "(※ 위 표 뼈대를 목록의 N개 항목 순서대로 정확히 N번 복제하여 이어서 작성. 표마다 제목만 목록의 해당 항목으로 교체할 것.)\n\n"
+                    judgment_prompt_tab3 += "(※ 위 표 뼈대를 N번 복제하여 연달아 작성)\n\n"
 
                     judgment_prompt_tab3 += "<pre_calc>\n"
                     judgment_prompt_tab3 += "## [출력 직전 자기 검증 (필수)]\n"
-                    judgment_prompt_tab3 += "- 위 사전 연산 3번에서 확정한 표 개수(N): [ ]\n"
-                    judgment_prompt_tab3 += "- 방금 실제로 그린 표 개수: [ ]\n"
-                    judgment_prompt_tab3 += "- 두 숫자가 일치하는가? [YES/NO] (NO라면 누락된 표를 지금 즉시 추가로 작성할 것)\n"
+                    judgment_prompt_tab3 += "- 확정한 표 개수(N): [ ]\n"
+                    judgment_prompt_tab3 += "- 방금 실제로 렌더링한 마크다운 표 개수: [ ]\n"
+                    judgment_prompt_tab3 += "- 두 숫자가 일치하는가? [YES/NO] (NO라면 누락된 단위의 표를 지금 즉시 추가로 렌더링할 것)\n"
                     judgment_prompt_tab3 += "</pre_calc>\n\n"
                 else:
                     judgment_prompt_tab3 += "## 3-2. [영양표시 오차 검증]\n(※ 성적서 미제출로 실측 오차 검증 생략)\n\n"
