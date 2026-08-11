@@ -99,11 +99,12 @@ def get_safe_text(response):
     except Exception as e:
         return f"🚨 [시스템 추출 오류] 모델 응답을 읽어오는 중 에러 발생: {e}"
 
-# 💡 [근본 해결 3-1: 조잡한 한글 정규식 제거] 표의 헤더와 구분선 앞뒤로 범용적인 줄바꿈 강제 삽입
+# 💡 [표 깨짐 완벽 방어 정규식 전면 교체] 
 def fix_markdown_table(text):
-    text = re.sub(r'([^\n])\n(\|)', r'\1\n\n\2', text)
-    text = re.sub(r'\|\n\n\|', '|\n|', text)
-    text = re.sub(r'([^\n])\s*(\|\s*---|\|\s*:)', r'\1\n\n\2', text)
+    # 1. 텍스트와 표 헤더가 붙어있을 경우 띄어줌 (표 렌더링 인식 오류 방지)
+    text = re.sub(r'([^\n|])\s*\n(\s*\|.*\|)\s*\n(\s*\|[\-\s:|]+\|)', r'\1\n\n\2\n\3', text)
+    # 2. 마크다운 표 내부에 잘못 들어간 빈 줄(엔터) 제거 (행이 끊어져 부서지는 현상 완벽 방어)
+    text = re.sub(r'(\|\s*)\n\s*\n(\s*\|)', r'\1\n\2', text)
     return text
 
 # ==========================================
@@ -187,7 +188,7 @@ RULE_BOOK_FULL = """
    - [순위 추론]: 시안(포장지)에 나열된 원재료의 텍스트 순서 자체가 '중량순(Rank A)'이라고 100% 신뢰하고 가정하라. 이를 바탕으로 Rule 28에 따른 원산지 타겟(Rank B 1~3위)을 스스로 소거법으로 도출하여 원산지 표시 여부를 깐깐하게 대조하라.
    - [2% / 5% 룰 유연화]: 정확한 %를 알 수 없으므로, 나열 순서에 대한 지적(Rule 34)은 무조건 합법(✅)으로 간주하라. 복합원재료 전개 생략(Rule 5)의 경우 부적합 처리하지 말고 "배합비 5% 미만 조건에 의한 합법적 생략인지 실무자 확인 요망"이라며 ⚠️(확인 요망) 처리하라.
 
-**Rule 5. [복합원재료 5% 미만 전개 면제 및 혼합제제 절대 예외 룰]**
+**Rule 5. [복합원재료 5% 미만 전개 면 면제 및 혼합제제 절대 예외 룰]**
    - [대원칙]: 배합비 5% 미만인 '복합원재료(일반 가공식품)'는 괄호를 열고 하위 성분을 전개할 의무가 아예 없습니다. 생략 합법(✅).
    - [첨가물 과잉 단속 금지 원칙]: 위 조건에 따라, 5% 미만 '일반 복합원재료' 내부에 [표 4, 5, 6] 소속 식품첨가물이 들어있더라도 명칭/용도 표시 의무가 완전히 면제됩니다.
    - [혼합제제 절대 면제 불가 - Rule 44와 연계]: 서류상 식품유형이 '혼합제제'인 원료는 이 5% 미만 면제 룰이 절대로 적용되지 않습니다. 혼합제제의 하위 성분을 검사할 때는 이 Rule 5를 완전히 머릿속에서 지우고, 무조건 Rule 44로 넘어가서 [표 4, 5, 6] 기준에 따라 첨가물 용도 표시 여부를 깐깐하게 따지십시오. "5% 미만 혼합제제이므로 용도 표시 면제"라고 판정하면 치명적인 시스템 오류입니다.
@@ -499,7 +500,7 @@ RULE_BOOK_FULL = """
    - 시안에 '당류가공품' 등이 있는데 서류 명칭과 글자가 다르다고 무조건 누락(🚨부적합) 처리하지 마십시오. 서류의 비고란이나 하위 전개 성분을 논리적으로 추론하여 시안의 범용 명칭과 유연하게 매칭(맵핑)하고 ✅적합 처리하십시오.
 
 **Rule 91. ['혼합제제' 명칭 단축 표기 절대 합법성]**
-   - 서류상에 '식품첨가물혼합제제'나 고유명칭(예: 비타민미네랄혼합제제)으로 기재되어 있더라도, 패키지 시안에 단순히 '혼합제제'라고만 줄여서 표기하는 실무상 완벽한 합법(✅)입니다. 이를 두고 규정 위반이나 명칭 축약 오류라며 🚨부적합 처리하지 마십시오.
+   - 서류상에 '식품첨가물혼합제제'나 고유명칭(예: 비타민미네랄혼합제제)으로 기재되어 있더라도, 패키지 시안에 단순히 '혼합제제'라고만 줄여서 표기하는 것은 실무상 완벽한 합법(✅)입니다. 이를 두고 규정 위반이나 명칭 축약 오류라며 🚨부적합 처리하지 마십시오.
 
 **Rule 92. [부분 캡처 이미지 한계에 따른 누락 항목 조건부 보류 룰]**
    - 사용자가 업로드한 이미지는 패키지의 특정 구역만 자른 부분 이미지일 수 있습니다. 따라서 '식품유형', '반품/교환처', '소비자상담실', '1399 신고문구' 등의 일반/행정 정보가 현재 검토 중인 이미지에서 보이지 않는다고 해서 즉시 🚨부적합(누락) 판정을 내리지 마십시오.
@@ -556,7 +557,7 @@ def get_sliced_rules(rule_numbers):
     return "\n\n".join(rules)
 
 # ==========================================
-# 💡 [근본 해결 2: AI 집중력 향상을 위한 탭별 룰 슬라이싱]
+# 탭별 맞춤형 룰 타겟팅 (AI 집중력 200% 향상 패치)
 # ==========================================
 TAB1_RULES = [3, 9, 17, 19, 21, 46, 50, 52, 53, 57, 62, 63, 68, 71, 72, 84, 86, 87, 88, 94, 95, 96, 99]
 TAB2_RULES = [1, 2, 4, 5, 8, 9, 12, 13, 14, 16, 28, 29, 30, 34, 35, 38, 39, 44, 45, 47, 48, 51, 53, 54, 60, 61, 64, 65, 70, 85, 89, 90, 91, 95]
@@ -614,7 +615,7 @@ def main():
         if product_input:
             st.session_state["current_product_name"] = product_input
 
-        # 상태값(key) 연동
+        # 상태값(key) 연동 패치
         product_type = st.radio("식품유형", ("일반식품", "특수의료용도식품", "축산물"), key="product_type")
         inspection_mode = st.radio("검토 모드", ("단품 기본 검토", "선물세트 교차 검토"), key="inspection_mode")
         doc_type = st.radio("증빙 서류 형태", ("통합 엑셀/PDF", "개별 한글라벨"), key="doc_type")
@@ -661,6 +662,7 @@ def main():
 
         st.markdown("---")
 
+        # 💡 [근본 해결: 파일 업로드 로직에 Vision API 통합]
         def get_uploaded_content():
             uploaded_items = []
             local_paths = []
@@ -689,7 +691,7 @@ def main():
                 file_path, label = task
                 content_parts = [f"### [{label}] ###"]
 
-                # 💡 [근본 해결 1: Vision API 부활] 이미지일 경우 구글 비전 API로 텍스트 강제 추출하여 주입
+                # Vision API 부활: 이미지일 경우 텍스트 사전 추출
                 if file_path.lower().endswith(('.png', '.jpg', '.jpeg')):
                     ocr_text = extract_text_with_vision(file_path)
                     if not ocr_text.startswith("[시스템 알림]"):
@@ -747,9 +749,7 @@ def main():
             st.warning("먼저 파일을 연동해주세요.")
             return None
 
-        # 탭 전체 시작 시간 기록
         t_tab_start = time.time()
-        
         use_cache = False
         cache_name = st.session_state.get("qc_cache_name")
         if cache_name:
@@ -775,7 +775,7 @@ def main():
         verified_text = ""
 
         # ==========================================
-        # Pass 1 (미션 분할 순차 추출 - 429 과부하 원천 차단)
+        # Pass 1 (미션 분할 순차 추출 - 429 과부하 원천 차단 패치)
         # ==========================================
         if extract_missions_list:
             t_pass1_start = time.time()
@@ -788,15 +788,15 @@ def main():
                         resp = model_pro.generate_content(get_payload(pass1_prompt), generation_config=generation_config, safety_settings=safety_settings)
                         return idx, get_safe_text(resp), None
                     except Exception as e:
-                        if attempt < 2: time.sleep(5); continue # 에러 시 5초 대기
+                        if attempt < 2: time.sleep(5); continue # 에러 시 5초 쿨타임 후 재시도
                         return idx, None, str(e)
 
-            # 💡 [근본 해결 2: 병렬 처리 제거] 무조건 1개씩 순차 실행하여 트래픽 과부하 방지
+            # 무조건 1개씩 순차 실행하여 트래픽 과부하 방지
             for i, m in enumerate(extract_missions_list):
                 idx, text, err = run_single_mission(i, m)
                 if err: extracted_results[idx] = f"[오류 - 미션 {idx+1}]: {err}"
                 else: extracted_results[idx] = text
-                time.sleep(2) # 안정성 극대화
+                time.sleep(2) # 다음 미션 전 2초 휴식 (안정성 극대화)
             
             extracted_text_combined = "\n\n".join([res for res in extracted_results if res is not None])
             t_pass1_elapsed = time.time() - t_pass1_start
@@ -828,7 +828,7 @@ def main():
                 pass18_result = f18.result()
             
             t_pass15_elapsed = time.time() - t_pass15_start
-            st.info(f"[시스템 로그] Pass 1.5 & 1.8 (정제 및 맞춤법 동시 실행) 소요시간: {t_pass15_elapsed:.1f}초")
+            st.info(f"[시스템 로그] Pass 1.5 & 1.8 (정제/맞춤법 동시 실행) 소요시간: {t_pass15_elapsed:.1f}초")
 
         # ==========================================
         # Pass 2 (최종 마크다운 렌더링)
@@ -836,7 +836,7 @@ def main():
         t_pass2_start = time.time()
         pass2_context = f"\n[정제본]\n{verified_text}\n[맞춤법 결과]\n{pass18_result}\n" if extract_missions_list else ""
         
-        # [다단 표 복구 및 타 탭 침범 방지 패치 + 빈 줄 강제]
+        # 💡 [다단 표 복구 및 빈 줄 강제 패치]
         pass2_prompt = f"""
 [PASS 2 - 룰 판정 전용 명령]
 [시스템 현재 날짜 및 기준 연도]: {current_date}
@@ -852,13 +852,13 @@ def main():
 절대로 묻지 않은 다른 영역의 내용을 임의로 창조하여 덧붙이지 마십시오. 
 오직 아래 제시된 [출력 양식]의 뼈대(사전 연산 질문, 체크리스트, 마크다운 표 등)를 누락 없이 100% 순서대로 채워 넣으십시오.
 ★특히 '표'만 단독으로 출력하고 '사전 연산' 단계를 임의로 삭제/생략하면 치명적인 시스템 오류로 간주합니다.★
+★사전 연산(사고 과정)은 반드시 <pre_calc> 와 </pre_calc> 태그 기호로 감싸서 출력하십시오.★
 
 💡 [마크다운 표 렌더링 절대 규칙 (표 깨짐 방지)]: 
 표(Table)를 그리기 직전과 직후에는 반드시 **엔터키(빈 줄)를 2번** 이상 입력하여, 일반 텍스트와 표가 절대 위아래로 달라붙지 않도록 격리하십시오.
 
 [가독성 향상 HTML 강제 명령]:
-판정 및 사유 칼럼의 텍스트가 줄글로 뭉쳐지면 실무자가 읽기 매우 힘듭니다.
-반드시 **<br>** 태그를 적극 사용하여 줄바꿈을 하고, **볼드체**를 활용하십시오.
+사유 칼럼 내부는 반드시 **<br>** 태그를 적극 사용하여 줄바꿈을 하고, **볼드체**를 활용하십시오.
 
 [출력 양식] 
 아래 뼈대만 복사하고 내용을 채울 것. (생략 절대 금지)
@@ -875,7 +875,7 @@ def main():
                 final_clean_text = f"[Pass 2 최종 오류]: {e}"
         
         t_pass2_elapsed = time.time() - t_pass2_start
-        st.info(f"[시스템 로그] Pass 2 (최종 표 작성/판정) 소요시간: {t_pass2_elapsed:.1f}초")
+        st.info(f"[시스템 로그] Pass 2 (최종 렌더링) 소요시간: {t_pass2_elapsed:.1f}초")
         
         t_tab_total = time.time() - t_tab_start
         st.success(f"해당 탭 연산 완료! (총 소요시간: {t_tab_total:.1f}초)")
@@ -919,7 +919,7 @@ def main():
                 return "**[캐시 만료 안내]**<br>파일 연동 후 60분이 초과되어 데이터가 지워졌습니다. 좌측 사이드바에서 캐싱 버튼을 다시 눌러주세요."
             return f"[시스템 런타임 오류 발생]: {e}"
 
-    # 로그실(Expander) UI 복구 패치
+    # 💡 [사전 연산 숨김 및 로그실 UI 복구 패치]
     def display_result(result, tab_name=""):
         if not result: return
         
@@ -928,23 +928,32 @@ def main():
         pass15_match = re.search(r'<pass15_log>(.*?)</pass15_log>', result, re.DOTALL)
         pass18_match = re.search(r'<pass18_log>(.*?)</pass18_log>', result, re.DOTALL)
 
-        if pass1_match or pass15_match or pass18_match:
-            with st.expander(f"🕵️‍♂️ [시스템 로그실] {tab_name} 연산 원본 데이터 보기 (필요시 클릭)"):
+        final_text = clean_match.group(1).strip() if clean_match else result
+        pre_calc_match = re.search(r'<pre_calc>(.*?)</pre_calc>', final_text, re.DOTALL)
+        
+        pre_calc_text = ""
+        if pre_calc_match:
+            pre_calc_text = pre_calc_match.group(1).strip()
+            # 메인 화면에서는 사전 연산 블록을 제거
+            final_text = re.sub(r'<pre_calc>.*?</pre_calc>', '', final_text, flags=re.DOTALL).strip()
+
+        if pass1_match or pass15_match or pass18_match or pre_calc_text:
+            with st.expander(f"🕵️‍♂️ [시스템 로그실] {tab_name} 연산 원본 및 사고 과정 보기"):
+                if pre_calc_text:
+                    st.warning("[사전 연산 (Chain of Thought) 사고 과정]")
+                    st.markdown(pre_calc_text)
                 if pass18_match:
-                    st.info("[PASS 1.8: 맞춤법 전용 스캐너 (Flash 모델 구동)]")
+                    st.info("[PASS 1.8: 맞춤법 전용 스캐너]")
                     st.code(pass18_match.group(1).strip())
                 if pass15_match:
-                    st.info("[PASS 1.5: 자체 복원 및 OCR 노이즈 정제 완료본]")
+                    st.info("[PASS 1.5: OCR 노이즈 정제 완료본]")
                     st.code(pass15_match.group(1).strip())
                 if pass1_match:
-                    st.text("[PASS 1: 분할 미션 원본 추출 로그]")
+                    st.text("[PASS 1: 미션 원본 추출 로그]")
                     st.code(pass1_match.group(1).strip())
             st.markdown("---")
 
-        if clean_match:
-            st.markdown(fix_markdown_table(clean_match.group(1).strip()), unsafe_allow_html=True)
-        else:
-            st.markdown(fix_markdown_table(result), unsafe_allow_html=True)
+        st.markdown(fix_markdown_table(final_text), unsafe_allow_html=True)
 
     # ==========================================
     # 탭 UI
@@ -966,10 +975,11 @@ def main():
                     "▶ 모든 면에서 미발견 시: 패키지 전체 이미지를 다 뒤져도 없을 경우에만 비로소 '패키지 전체 스캔 결과 해당 마케팅/인증 내역 없음'으로 사유를 적고 ✅ 적합(해당 없음) 처리하십시오."
                 ]
                 
-                judgment_prompt = """## 1. [사전 연산: 당류 은폐 및 마케팅 팩트체크 추적]
-(※ AI는 표를 작성하기 전에 반드시 시안 전체의 텍스트를 스캔하여 아래 질문에 단답형으로 대답하여 논리를 확정할 것)
+                judgment_prompt = """<pre_calc>
+## 1. [사전 연산: 당류 은폐 및 마케팅 팩트체크 추적]
 1. 시안에 '무가당', '설탕 무첨가', '당 ZERO' 등의 마케팅 문구가 존재하는가? [YES / NO]
-2. (위 질문이 YES일 경우) 원재료명 텍스트 전체(혼합제제 괄호 내부 포함)를 픽셀 단위로 스캔했을 때, '포도당', '시럽', '물엿', '덱스트린', '과당', '설탕' 글자가 단 한 글자라도 존재하는가? [YES / NO] (YES일 경우 정확히 어떤 단어인지 기재할 것. 예: 포도당시럽분말)
+2. 원재료명 텍스트 전체(혼합제제 괄호 내부 포함)를 픽셀 단위로 스캔했을 때, '포도당', '시럽', '물엿', '덱스트린', '과당', '설탕' 글자가 단 한 글자라도 존재하는가? [YES / NO]
+</pre_calc>
 
 ## 2. [주표시면 및 마케팅 뱃지 정밀 검증]
 | 검토 항목 | 검토 룰(Rule) | 상세 사유 (오탈자 무관용, <br> 태그로 줄바꿈 필수) | 판정 |
@@ -1023,13 +1033,13 @@ def main():
                 4. [투트랙 유연한 맵핑]: 당류/시럽류(`당류가공품`), 올리고당류, 첨가물은 문맥상 일치하면 억지 불일치 처리하지 말고 합법 치환(✅)으로 인정하십시오.
                 """
 
-                judgment_prompt = "## [사전 연산: 원산지 Rank B 및 혼합제제 해체 알고리즘]\n"
-                judgment_prompt += "(AI는 아래 5단계를 단답형으로 100% 명확히 작성하여 논리를 확정한 후 대조 표를 작성할 것)\n"
+                judgment_prompt = "<pre_calc>\n## [사전 연산: 원산지 Rank B 및 혼합제제 해체 알고리즘]\n"
+                judgment_prompt += "(AI는 아래 5단계를 단답형으로 100% 명확히 작성하여 논리를 확정할 것)\n"
                 judgment_prompt += "1. **[Rank B 제외 대상 필터링]**: [삭제 원료명]\n"
                 judgment_prompt += "2. **[Rank B Top 3 확정]**: (배합비율 없으면 시안 나열 순서대로 강제 추론) 1위: [ ], 2위: [ ], 3위: [ ]\n"
                 judgment_prompt += "3. **[Rule 1: 98% 컷오프 예외 판정]**: \n"
                 judgment_prompt += "4. **[Rule 89/95 타겟 락온]**: \n"
-                judgment_prompt += "5. **[복합원재료 vs 혼합제제 전개 라우팅]**: \n\n"
+                judgment_prompt += "5. **[복합원재료 vs 혼합제제 전개 라우팅]**: \n</pre_calc>\n\n"
 
                 if doc_mode == "개별 한글라벨":
                     if has_any_doc:
@@ -1096,6 +1106,7 @@ def main():
                 if has_any_doc:
                     title_prefix = "3-3." if "선물세트" in ins_mode else "3-2."
                     
+                    judgment_prompt_tab3 += "<pre_calc>\n"
                     judgment_prompt_tab3 += f"## {title_prefix} [사전 연산: 생성해야 할 표 목록 확정 (절대 생략 금지)]\n"
                     judgment_prompt_tab3 += "[절대 명령]: 영양정보표 시안에 '1컵당'과 '총 내용량당'처럼 단위가 2개 이상 나란히 병기되어 있다면, 절대로 하나만 검사하고 끝내지 마십시오! 반드시 각각의 단위에 대해 독립된 표를 모두 생성하여 이중 검증해야 합니다.\n\n"
                     judgment_prompt_tab3 += "1. **시안에 존재하는 '맛/종류' 목록**: (실제 이름을 그대로 나열. 예시가 아니라 시안에 적힌 텍스트 그대로. 1개뿐이면 1개만 적을 것)\n"
@@ -1104,7 +1115,8 @@ def main():
                     judgment_prompt_tab3 += "   - 표 1: [맛A] - [단위1]\n"
                     judgment_prompt_tab3 += "   - 표 2: [맛A] - [단위2]\n"
                     judgment_prompt_tab3 += "   - ... (실제 개수만큼 계속)\n"
-                    judgment_prompt_tab3 += "4. **[총 표 개수 확정]**: 위에서 나열한 줄 수 = **N개**\n\n"
+                    judgment_prompt_tab3 += "4. **[총 표 개수 확정]**: 위에서 나열한 줄 수 = **N개**\n"
+                    judgment_prompt_tab3 += "</pre_calc>\n\n"
 
                     judgment_prompt_tab3 += "## [영양표시 오차 검증 매트릭스]\n"
                     judgment_prompt_tab3 += "[절대 명령]: 위 3번 목록에 적힌 순서 그대로, 목록에 있는 항목 이름을 표 제목에 그대로 복사하여 정확히 N개의 표를 만들어라.\n"
@@ -1115,10 +1127,12 @@ def main():
                     judgment_prompt_tab3 += "| 영양성분 | 성적서 환산값(A) | 시안 표시량(B) | 허용오차 커트라인 | 1일 기준치 % 검증 | 상세 사유 | 판정 |\n|---|---|---|---|---|---|---|\n\n"
                     judgment_prompt_tab3 += "(※ 위 표 뼈대를 목록의 N개 항목 순서대로 정확히 N번 복제하여 이어서 작성. 표마다 제목만 목록의 해당 항목으로 교체할 것.)\n\n"
 
+                    judgment_prompt_tab3 += "<pre_calc>\n"
                     judgment_prompt_tab3 += "## [출력 직전 자기 검증 (필수)]\n"
                     judgment_prompt_tab3 += "- 위 사전 연산 3번에서 확정한 표 개수(N): [ ]\n"
                     judgment_prompt_tab3 += "- 방금 실제로 그린 표 개수: [ ]\n"
-                    judgment_prompt_tab3 += "- 두 숫자가 일치하는가? [YES/NO] (NO라면 누락된 표를 지금 즉시 추가로 작성할 것)\n\n"
+                    judgment_prompt_tab3 += "- 두 숫자가 일치하는가? [YES/NO] (NO라면 누락된 표를 지금 즉시 추가로 작성할 것)\n"
+                    judgment_prompt_tab3 += "</pre_calc>\n\n"
                 else:
                     judgment_prompt_tab3 += "## 3-2. [영양표시 오차 검증]\n(※ 성적서 미제출로 실측 오차 검증 생략)\n\n"
 
@@ -1150,9 +1164,9 @@ def main():
         display_result(st.session_state["result_tab4"], "기타면/측면")
 
     with tab5:
-        if st.button("AI 법무팀장 자유 스캔 시작", key="btn_law"):
+        if st.button("AI 법무팀 자유 스캔 시작", key="btn_law"):
             with st.spinner("AI 법률 엔진 가동: 법령 PDF 기반 심층 스캔 중... (이 과정은 고도의 추론이 필요하여 시간이 다소 소요될 수 있습니다)"):
-                free_style_prompt = """## 5. [AI 법무팀장 특별 감사 리포트 (심층 법률·마케팅 스캔)]
+                free_style_prompt = """## 5. [AI 법무팀 특별 감사 리포트 (심층 법률·마케팅 스캔)]
 당신은 대한민국 최고의 식품 전문 변호사이자 규제 당국(식약처)의 가장 깐깐한 심사관입니다.
 이 작업은 속도보다 **'극도의 정확성과 꼼꼼함'**이 훨씬 중요합니다. 업로드된 「식품등의 표시·광고에 관한 법률」, 시행령, 시행규칙, 부당광고 고시 등 법령 PDF 원문 데이터를 샅샅이 뒤져서, 기존 기계적 룰이 놓칠 수 있는 '문맥상의 위법성', '소비자 기만 가능성', '과대광고' 리스크를 영혼까지 끌어모아 찾아내십시오.
 
