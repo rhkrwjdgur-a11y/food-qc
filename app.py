@@ -596,7 +596,7 @@ def main():
     """
     st.markdown(print_css, unsafe_allow_html=True)
     
-    st.title("식품 표시사항 정밀 검토 시스템 (V350.2 - 속도 진단 패치)")
+    st.title("식품 표시사항 정밀 검토 시스템 (V350.3)")
     
     current_product = st.session_state.get("current_product_name", "지정되지 않음")
     st.markdown(f"#### **현재 검토 중인 제품:** `{current_product}`")
@@ -831,9 +831,23 @@ def main():
         pass2_context = f"\n[정제본]\n{verified_text}\n[맞춤법 결과]\n{pass18_result}\n" if extract_missions_list else ""
         pass2_prompt = f"""
 [PASS 2 - 룰 판정 명령]
+[시스템 현재 날짜 및 기준 연도]: {current_date} (현재가 {current_year}년임을 절대 잊지 마십시오.)
+[제품유형]: {st.session_state.get("product_type", "일반식품")}
+[검토모드]: {st.session_state.get("inspection_mode", "단품")}
 [핵심 룰] {tab_rules}
 {pass2_context}
-[출력 양식] 뼈대만 복사하고 내용을 채울 것. (생략 금지, <br> 태그 사용)
+
+🛑 [최고 수준 경고: 영역 침범 및 과잉 생성(오지랖) 절대 금지] 🛑
+당신은 현재 요청받은 특정 탭(Tab)의 뼈대만 채우는 '국소적 표 생성기'입니다.
+업로드된 모든 이미지를 다 볼 수 있더라도, 절대로 묻지 않은 다른 영역의 내용(예: 종합 결론, 원재료 1:1 대조표, 영양성분 계산표 등)을 임의로 창조하여 표 밑에 덧붙이지 마십시오. 
+오직 아래 제시된 [출력 양식]의 표만 딱 완성한 후, 단 한 줄의 부연 설명이나 꼬리말도 없이 그 즉시 출력을 강제 종료(Stop)하십시오. (어길 시 치명적 에러 간주)
+
+[가독성 향상 HTML 강제 명령]:
+판정 및 사유 칼럼의 텍스트가 줄글로 뭉쳐지면 실무자가 읽기 매우 힘듭니다.
+반드시 **<br>** 태그를 적극 사용하여 줄바꿈을 하고, **볼드체**를 활용하여 직관적으로 요약 작성하십시오.
+
+[출력 양식] 
+아래 뼈대만 복사하고 내용을 채울 것. (생략 금지)
 {judgment_prompt}
 """
         final_clean_text = "[Pass 2 에러]"
@@ -864,7 +878,7 @@ def main():
         
         dynamic_prompt = f"""
         [시스템 현재 날짜 및 기준 연도]: {current_date} (현재가 {current_year}년임을 절대 잊지 마십시오.)
-        [제품유형]: {product_type}\n[검토모드]: {inspection_mode}\n[우리 공장 알레르기 마스터 목록]: {factory_allergens}
+        [제품유형]: {st.session_state.get("product_type", "일반식품")}\n[검토모드]: {st.session_state.get("inspection_mode", "단품")}\n[우리 공장 알레르기 마스터 목록]: {st.session_state.get("factory_allergens", "")}
         ========================================\n{prompt_text}
         """
         
@@ -907,7 +921,7 @@ def main():
 
     with tab1:
         if st.button("주표시면 분석 시작", key="btn_main"):
-            with st.spinner("정밀 법리 검수 매트릭스 연산 중..."):
+            with st.spinner("데이터 스캔 및 판정 중..."):
                 missions = [
                     "[정밀 추출 명령]: 텍스트와 영양성분 수치 추출은 기본적으로 '주표시면(앞면)'에서 수행하되, '무(ZERO), 무첨가, 100%' 등 마케팅 클레임의 진위 여부(Rule 99)를 교차 검증하기 위해 반드시 뒷면의 '원재료명' 란 전체 텍스트를 전수 스캔하십시오.",
                     "뒷면/영양성분표 이미지를 스캔하여 '총 내용량' 및 '총 열량(kcal)', 앞면에 강조된 특정 영양소의 '% 기준치'를 교차 추출.",
@@ -1055,10 +1069,10 @@ def main():
                     title_prefix = "3-3." if "박스" in ins_mode else "3-2."
                     
                     judgment_prompt_tab3 += f"## {title_prefix} [사전 연산: 생성해야 할 표 목록 확정 (절대 생략 금지)]\n"
-                    judgment_prompt_tab3 += "[명령]: 시안 이미지를 실제로 보고 아래 체크리스트를 작성하라. 절대 예시 숫자를 베끼지 말고, 지금 눈앞의 이미지에 실제로 인쇄된 맛/단위 개수를 세어라.\n\n"
+                    judgment_prompt_tab3 += "[절대 명령]: 영양정보표 시안에 '1컵당'과 '총 내용량당'처럼 단위가 2개 이상 나란히 병기되어 있다면, 절대로 하나만 검사하고 끝내지 마십시오! 반드시 각각의 단위에 대해 독립된 표를 모두 생성하여 이중 검증해야 합니다.\n\n"
                     judgment_prompt_tab3 += "1. **시안에 존재하는 '맛/종류' 목록**: (실제 이름을 그대로 나열. 예시가 아니라 시안에 적힌 텍스트 그대로. 1개뿐이면 1개만 적을 것)\n"
-                    judgment_prompt_tab3 += "2. **각 맛마다 실제로 병기된 '표시 단위' 목록**: (예: 100mL당 1개뿐 / 1컵당+총내용량당 2개 — 실제 이미지에 인쇄된 것만 인정, 없는 단위를 상상하지 말 것)\n"
-                    judgment_prompt_tab3 += "3. **[생성해야 할 표 목록]**: (맛 × 단위 조합을 하나씩 번호 매겨 전부 나열하라. N개면 N줄이 나와야 한다.)\n"
+                    judgment_prompt_tab3 += "2. **각 맛마다 실제로 병기된 '표시 단위' 개수 및 명칭**: (예: '1컵(80g)당' 1개, '총 내용량(320g)당' 1개 -> 총 2개 단위 확인됨)\n"
+                    judgment_prompt_tab3 += "3. **[생성해야 할 표 목록]**: (맛 × 단위 조합을 하나씩 번호 매겨 전부 나열하라. 단위가 2개면 표도 무조건 2개 나와야 한다.)\n"
                     judgment_prompt_tab3 += "   - 표 1: [맛A] - [단위1]\n"
                     judgment_prompt_tab3 += "   - 표 2: [맛A] - [단위2]\n"
                     judgment_prompt_tab3 += "   - ... (실제 개수만큼 계속)\n"
@@ -1066,9 +1080,8 @@ def main():
 
                     judgment_prompt_tab3 += "## [영양표시 오차 검증 매트릭스]\n"
                     judgment_prompt_tab3 += "[절대 명령]: 위 3번 목록에 적힌 순서 그대로, 목록에 있는 항목 이름을 표 제목에 그대로 복사하여 정확히 N개의 표를 만들어라.\n"
-                    judgment_prompt_tab3 += "- 목록에 없는 표를 창조하지 마라.\n"
-                    judgment_prompt_tab3 += "- 목록에 있는 표를 하나라도 빠뜨리면 안 된다. 특히 '총내용량당'이 목록에 있었는데 표를 안 그리면 시스템 치명적 오류다.\n"
-                    judgment_prompt_tab3 += "- 표 개수를 스스로 세어보고, 목록의 N과 실제로 그린 표 개수가 다르면 즉시 멈추고 누락분을 추가로 그려라.\n\n"
+                    judgment_prompt_tab3 += "- 목록에 있는 표를 하나라도 빠뜨리면 안 된다. (특히 '총 내용량당' 표를 생략하면 치명적 오류 간주)\n"
+                    judgment_prompt_tab3 += "- '총 내용량당' 수치 검증 시, 1회 섭취량 표기량에 배수(xN)를 곱하는 꼼수를 절대 쓰지 말고, 반드시 성적서(100g당) 실측값을 기준으로 총 내용량(총 중량) 비율에 맞게 재산출할 것.\n\n"
 
                     judgment_prompt_tab3 += "### [표 순번] [목록에서 그대로 가져온 맛-단위 이름]\n"
                     judgment_prompt_tab3 += "| 영양성분 | 성적서 환산값(A) | 시안 표시량(B) | 허용오차 커트라인 | 1일 기준치 % 검증 | 상세 사유 | 판정 |\n|---|---|---|---|---|---|---|\n\n"
