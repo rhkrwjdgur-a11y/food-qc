@@ -1172,31 +1172,31 @@ def main():
                 st.session_state["result_tab4"] = run_qc_3pass(RULES_TAB4, judgment_prompt, missions)
         display_result(st.session_state["result_tab4"], "기타면/측면")
 
-    with tab5:
+   with tab5:
         if st.button("AI 법무팀 자유 스캔 시작", key="btn_law"):
-            with st.spinner("AI 법률 엔진 가동 중 (초정밀 딥다이브 모드 스캔)... 이 과정은 속도보다 정확성을 우선하여 시간이 다소 소요될 수 있습니다."):
-                # 💡 [V4.2 핵심 패치: 5번 탭 속도 무제한, 초정밀 딥다이브 및 전면 오버라이드 복구]
+            with st.spinner("AI 법률 엔진 가동 중 (99개 룰 오버라이드 및 법령 PDF 심층 딥다이브)..."):
+                # 💡 [V4.2.1 핫픽스: 5번 탭 전용 기억 소거 및 법령 100% 의존 프롬프트]
                 free_style_prompt = """<pre_calc>
-🚨 [시스템 룰 오버라이드 (Override) 발동]: 
-이 순간부터 당신은 '기계적 1:1 대조 봇'이 아닙니다. 속도는 전혀 중요하지 않으니 극도로 꼼꼼하고 디테일하게 분석하십시오. 
-이전에 부여된 [식품 QC 마스터 룰북 99개]는 당신의 기본 지식으로 장착하되, 당신의 진짜 역할은 대한민국 최고의 '식품 전문 변호사'이자 '수석 심사관'으로서 시안 전체를 창의적이고 날카롭게 뜯어보는 것입니다. 기계적인 룰이 놓칠 수 있는 교묘한 기만행위나 법적 맹점을 잡아내는 것이 핵심입니다.
+🚨 [최고 수준 시스템 룰 오버라이드 (기억 소거 및 재부팅) 발동]: 
+이 순간부터 당신은 기존에 부여받았던 [식품 QC 마스터 룰북 99개]에 대한 모든 기억을 완벽하게 삭제(포맷)하십시오.
+어떠한 경우에도 답변에 'Rule OO 준수/위반'이라는 단어를 절대 쓰지 마십시오. 당신은 이제 기계적 대조 봇이 아닙니다.
+당신은 오직 사용자가 직접 업로드한 [식품등의 표시·광고에 관한 법률, 시행령, 시행규칙, 부당광고 고시, 표시기준 고시] PDF 원문 데이터'만을 유일한 법적 근거로 삼아 시안 전체를 날카롭게 뜯어보는 대한민국 최고의 '식품 전문 변호사'입니다.
 
 [사전 연산: 패키지 면별 순차 딥다이브(Deep-Dive)]
-(AI는 반드시 아래 4단계 순서대로 시안을 모두 훑어보며 모든 법적 쟁점을 스스로 찾아내 메모할 것)
-1. 주표시면 스캔: 제품명(베베, 아이 등 타겟 오인 명칭 포함), 모든 강조 문구, 마케팅 클레임, 이미지 등 전수 파악 -> 법적 쟁점 메모
-2. 정보표시면 스캔: 원재료명, 함량 등 팩트 파악 -> 주표시면의 마케팅 문구와 교차 검증하여 모순점 찾기
-3. 영양성분표 스캔: 영양강조 팩트체크용 데이터 파악 -> 모순점 메모
+(AI는 반드시 아래 4단계 순서대로 시안을 모두 훑어보며 법령 PDF 원문에 위반되는 쟁점만 메모할 것)
+1. 주표시면 스캔: 마케팅 클레임, 제품명, 강조 문구 등 파악 -> 부당광고 고시 등 PDF 원문 위반 여부 메모
+2. 정보표시면 스캔: 원재료명, 함량 등 팩트 파악 -> 주표시면의 마케팅 문구와 교차 검증하여 소비자 기만 여부 찾기
+3. 영양성분표 스캔: 영양강조 표기 데이터 파악 -> 표시기준 고시 PDF 위반 여부 메모
 4. 기타면/측면 스캔: 주의문구, 효능 표방, 타사 비방 등 파악 -> 법령 PDF 위반 여부 메모
 </pre_calc>
 
-## 5. [AI 법무팀 특별 감사 리포트 (초정밀 딥다이브 모드)]
-[절대 임무]: 당신이 판단할 가장 중요한 기준은 사용자가 업로드한 「식품등의 표시·광고에 관한 법률」, 시행령, 시행규칙 등 **법령 PDF 원문 데이터**입니다. 패키지의 제품명부터 시작하여 모든 면(주표시면 ➔ 정보표시면 ➔ 영양성분표 ➔ 기타면)을 순서대로 짚어가며, 룰북에 없는 내용이더라도 법에 위반될 소지가 있다면 예리하게 찾아내십시오. 
-속도에 구애받지 말고 아주 디테일하게 작성하십시오. 잘된 것은 칭찬(적합 사유 명시)하고, 모순이나 위법이 있으면 가차 없이 철퇴를 가하십시오.
+## 5. [AI 법무팀 특별 감사 리포트 (법령 PDF 심층 분석)]
+[절대 임무]: 속도에 구애받지 말고 아주 디테일하게 작성하십시오. 판단의 근거는 절대 'Rule OO'이 될 수 없습니다. 무조건 **"「식품등의 표시기준」 (식약처 고시) 제O조에 따라..."** 또는 **"「식품표시광고법」 제O조를 위반할 소지가..."** 와 같이 업로드된 법령 문서의 구체적인 조항이나 지침을 들이대며 논리적으로 지적하십시오. 
 
 ### 챕터 1. 🔍 [패키지 구역별 마케팅·법률 심층 분석]
-- 제품명을 필두로 패키지를 4개 구역으로 나누어, 발견된 모든 주요 문구 및 디자인에 대해 법률 PDF에 근거하여 상세히 브리핑하십시오.
-- **[합법/적합 사례]**: "이 문구는 OOO법(또는 식약처 고시)에 따라 이렇게 적용되어야 하는데, 현재 시안에 아주 잘 적용되어 있어 적합합니다." 형태로 긍정적인 검토 결과를 명확히 명시하십시오.
-- **[기만/위법 리스크]**: 앞뒤가 맞지 않는 클린 라벨 워싱, 건강기능식품 오인, 질병 예방 효능 표방, 타겟층 오인 등 법적 리스크가 있는 부분은 법령 원문을 근거로 강력하게 지적하십시오.
+- 제품명을 필두로 패키지를 4개 구역으로 나누어, 발견된 모든 주요 문구 및 디자인에 대해 법률 PDF 원문에 근거하여 상세히 브리핑하십시오.
+- **[합법/적합 사례]**: 시안의 표기가 법령에 아주 잘 부합하여 리스크가 없는 훌륭한 사례를 칭찬하십시오.
+- **[기만/위법 리스크]**: 앞뒤가 맞지 않는 클린 라벨 워싱, 건강기능식품 오인, 질병 예방 효능 표방, 타겟층 오인(예: 영유아 오인 등) 등 법적 리스크가 있는 부분은 법령 원문을 근거로 가차 없이 지적하십시오.
 
 ### 챕터 2. ⚖️ [리스크 적발 및 법률 위반 사항 총정리]
 - 챕터 1에서 분석한 내용 중 **수정이나 확인이 필요한 법적 리스크(부적합 / 확인요망)**만 쏙 뽑아서 아래 마크다운 표 뼈대에 작성하십시오. 
@@ -1205,7 +1205,26 @@ def main():
 | 적발된 리스크 (Risk) | 발견 위치 및 문구 | 관련 법령 원문 및 판정 근거 (상세 사유) | 방어 및 수정 제안 |
 |---|---|---|---|
 """
-                st.session_state["result_tab5"] = run_qc_model(free_style_prompt)
+                # 💡 [핵심 패치]: 5번 탭에서는 RULE_BOOK_FULL을 아예 페이로드에서 빼버림
+                cache_name = st.session_state.get("qc_cache_name")
+                generation_config = genai.types.GenerationConfig(temperature=0.0, max_output_tokens=65536)
+                
+                if cache_name:
+                    try:
+                        cache = genai.caching.CachedContent.get(cache_name)
+                        model = genai.GenerativeModel.from_cached_content(cached_content=cache)
+                        # 캐시에서 룰북을 제외할 순 없지만 프롬프트가 오버라이드함
+                        response = model.generate_content([free_style_prompt], generation_config=generation_config)
+                    except:
+                        model = genai.GenerativeModel(MODEL_NAME, system_instruction=SYSTEM_PROMPT)
+                        payload_without_rules = st.session_state["uploaded_content"] + [free_style_prompt]
+                        response = model.generate_content(payload_without_rules, generation_config=generation_config)
+                else:
+                    model = genai.GenerativeModel(MODEL_NAME, system_instruction=SYSTEM_PROMPT)
+                    payload_without_rules = st.session_state["uploaded_content"] + [free_style_prompt]
+                    response = model.generate_content(payload_without_rules, generation_config=generation_config)
+                
+                st.session_state["result_tab5"] = fix_markdown_table(get_safe_text(response))
         display_result(st.session_state["result_tab5"], "AI법률스캔")
 
     with tab6:
