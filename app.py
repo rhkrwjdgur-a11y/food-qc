@@ -1172,7 +1172,7 @@ def main():
                 st.session_state["result_tab4"] = run_qc_3pass(RULES_TAB4, judgment_prompt, missions)
         display_result(st.session_state["result_tab4"], "기타면/측면")
 
-   with tab5:
+with tab5:
         if st.button("AI 법무팀 자유 스캔 시작", key="btn_law"):
             with st.spinner("AI 법률 엔진 가동 중 (99개 룰 오버라이드 및 법령 PDF 심층 딥다이브)..."):
                 # 💡 [V4.2.1 핫픽스: 5번 탭 전용 기억 소거 및 법령 100% 의존 프롬프트]
