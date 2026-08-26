@@ -255,8 +255,9 @@ RULE_BOOK_FULL = """
    - ['무(Zero)' 표시 기준]: 열량(100mL당 4kcal 미만), 나트륨/지방/당류(5mg/0.5g/0.5g 미만).
    - [부적합 시 절대 원칙]: 부적합 판정을 내리려면 4가지 조건의 수식을 모조리 나열하여 전부 미달임을 명백히 증명해야 합니다. 하나라도 통과 시 무조건 합법 처리하십시오.
 
-**Rule 22. [다국어 폰트 크기 예외]**
-   - 외국어는 한글보다 작거나 같아야 함.
+**Rule 22. [다국어 폰트 크기 예외 및 추가문구 면제 룰]**
+   - 법적 의무표시사항(제품명, 원재료명, 내용량, 주의문구 등)을 외국어로 병기할 때는 반드시 한글보다 작거나 같아야 한다 (위반 시 🚨부적합).
+   - 🟢 단, 법적 의무표시사항이 아닌 단순 마케팅 목적의 추가문구/배경 디자인(예: 거대한 영문 강조 텍스트 등)은 폰트 크기 규제 대상이 아니므로 한글보다 훨씬 커도 완벽한 합법(✅)이다. 임의로 크기를 지적하지 마라.
 
 **Rule 23. [식약처 영양성분별 '0' 표시 절대 규정 및 다단 표기 종속 법칙]**
    - 다음 성분은 실측 환산값이 아래 기준 미만일 경우 반드시 "0"으로 표시해야 합니다. (열량 5kcal 미만, 나트륨 5mg 미만, 탄/당/단/지/포 0.5g 미만, 콜레스테롤 2mg 미만, 트랜스지방 0.2g 미만)
@@ -465,7 +466,7 @@ RULE_BOOK_FULL = """
    - 기준치 존재 성분 옆에 비율(%) 병기 필수.
 
 **Rule 84. [유기가공식품 3단계 정밀 판정 룰 (95% / 70% 컷오프)]**
-   - 시안(앞면/기타면 등)에 '유기농' 또는 '유기' 단어가 발견되면 반드시 배합비(%) 합계를 추적하여 아래 3단계에 따라 엄격히 판정하십시오.
+   - 시안(앞면/기타면 등)에 '유기농' 또는 '유기 단어가 발견되면 반드시 배합비(%) 합계를 추적하여 아래 3단계에 따라 엄격히 판정하십시오.
    - [95% 이상]: 유기가공식품 인증 마크 사용 필수. 제품명 및 패키지 전면 강조 표기 완벽 합법(✅적합).
    - [70% 이상 ~ 95% 미만]: 인증 마크 사용 절대 불가(🚨부적합). 제품명에 '유기농' 사용 불가(🚨부적합). 단, 주표시면 등에 '유기농 원료 OO% 함유'처럼 유기농 원료의 총 함량을 명확하게 병기한 마케팅 문구는 합법(✅적합).
    - [70% 미만]: 인증 마크 불가(🚨). 제품명 불가(🚨). 패키지 전면/측면 등 마케팅 목적의 '유기농' 강조 문구 전면 금지(🚨부적합). 오직 뒷면 '원재료명' 리스트 내부에만 '유기농OOO' 표기 허용(✅적합).
@@ -593,6 +594,76 @@ def main():
     </style>
     """
     st.markdown(print_css, unsafe_allow_html=True)
+    
+    # ==========================================
+    # 🌟 [발표용 고대비 커스텀 CSS] (추가된 부분)
+    # ==========================================
+    custom_theme_css = """
+    <style>
+    @media screen {
+        /* 1. 전체 텍스트 가독성 향상 (완전 검은색으로 대비 높임) */
+        html, body, [class*="css"] {
+            color: #111111 !important;
+        }
+        
+        /* 2. 사이드바 배경색을 눌러주고, 메인 화면과 구분되는 굵은 선 추가 */
+        [data-testid="stSidebar"] {
+            background-color: #f0f2f6 !important;
+            border-right: 2px solid #a1a1aa !important;
+        }
+        
+        /* 3. 탭(Tab) 디자인 완전히 분리 및 강조 (폴더 형태로 뚜렷하게) */
+        .stTabs [data-baseweb="tab-list"] {
+            border-bottom: 3px solid #d4d4d8 !important;
+            gap: 4px;
+        }
+        .stTabs [data-baseweb="tab"] {
+            background-color: #f4f4f5;
+            border: 1px solid #d4d4d8 !important;
+            border-bottom: none !important;
+            border-radius: 6px 6px 0 0;
+            padding: 10px 16px !important;
+            color: #52525b !important;
+            font-weight: 600 !important;
+        }
+        .stTabs [aria-selected="true"] {
+            background-color: #0056b3 !important; /* 선택된 탭은 진한 파란색 */
+            color: white !important;
+            border: 1px solid #0056b3 !important;
+        }
+        
+        /* 4. 액션 버튼(분석 시작) 명확하고 입체적으로 (시선 집중) */
+        .stButton>button {
+            background-color: #0056b3 !important;
+            color: white !important;
+            font-size: 16px !important;
+            font-weight: bold !important;
+            border-radius: 6px !important;
+            border: 2px solid #004085 !important;
+            padding: 10px 24px !important;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.15);
+        }
+        .stButton>button:hover {
+            background-color: #004085 !important;
+            border-color: #002752 !important;
+        }
+        
+        /* 5. 텍스트 입력창 및 파일 업로더 테두리 선명하게 */
+        .stTextInput>div>div>input, .stTextArea>div>div>textarea, .stFileUploader {
+            border: 2px solid #71717a !important;
+            border-radius: 6px !important;
+            background-color: #ffffff !important;
+        }
+        
+        /* 6. 가로 구분선(hr) 두껍고 진하게 */
+        hr {
+            border-top: 2px solid #a1a1aa !important;
+            margin: 1.5em 0 !important;
+        }
+    }
+    </style>
+    """
+    st.markdown(custom_theme_css, unsafe_allow_html=True)
     
     st.title("식품 표시사항 정밀 검토 시스템 (V4.9.4 Ultimate Master)")
     
