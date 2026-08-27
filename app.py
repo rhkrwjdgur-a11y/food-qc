@@ -178,7 +178,7 @@ RULE_BOOK_FULL = """
 **Rule 3. [주표시면 vs 영양성분표 누락 교차검증 강제 룰]**
    - [대원칙]: 주표시면(앞면)이나 기타면에 특정 영양성분(예: 나이아신, 비타민E 등)의 함량이나 명칭이 뱃지 등으로 강조되어 있다면, 해당 성분은 반드시 뒷면 영양정보표 테두리 안에도 법적 명칭으로 누락 없이 기재되어야 합니다.
    - 주표시면에는 자랑해놓고 영양정보표에 해당 항목이 아예 없다면 명백한 위법(🚨부적합)입니다.
-   - 강조된 영양소 수치는 뒷면 표의 수치와 단 1의 오차도 없이 100% 일치해야 합니다.
+   - 강조된 영양소 수치는 뒷면 표의 수치와 단 1의 오차도 일치해야 합니다.
    - 세트 포장의 주표시면에는 '총 내용량'과 '총 열량(kcal)'이 모두 기재되어야 합니다.
 
 **Rule 4. [배합비 데이터 누락 시 동적 추론(Dynamic Inference) 및 무죄 추정 룰]**
@@ -705,7 +705,7 @@ def main():
     """
     st.markdown(custom_theme_css, unsafe_allow_html=True)
     
-    st.markdown("<h1>Label Guard AI <span style='font-size:0.5em; color:#64748b;'>식품 패키지 무결점 검증 시스템 (V5.3 Ultimate)</span></h1>", unsafe_allow_html=True)
+    st.markdown("<h1>Label Guard AI <span style='font-size:0.5em; color:#64748b;'>식품 패키지 무결점 검증 시스템 (V5.4 Ultimate)</span></h1>", unsafe_allow_html=True)
     
     current_product = st.session_state.get("current_product_name", "지정되지 않음")
     st.markdown(f"#### **현재 타겟 제품:** `{current_product}`")
@@ -1154,7 +1154,7 @@ def main():
 
                 # 🔥 [V4.9.2 핫픽스: Rule 89 빈칸 채우기 강제 연산 로직]
                 judgment_prompt = "<pre_calc>\n## [사전 연산: 원산지 Rank B 및 혼합제제 해체 알고리즘]\n"
-                judgment_prompt += "(AI는 아래 5단계를 단답형으로 100% 명확히 작성하여 논리를 확정할 것)\n"
+                judgment_prompt += "(AI는 아래 5단계를 단답형으로 100% 명확히 작성하여 논리를 확정할 단답형으로 100% 명확히 작성하여 논리를 확정할 것)\n"
                 judgment_prompt += "1. **[Rank B 제외 대상 필터링]**: [삭제 원료명]\n"
                 judgment_prompt += "2. **[Rank B Top 3 확정]**: (배합비율 없으면 시안 나열 순서대로 강제 추론) 1위: [ ], 2위: [ ], 3위: [ ]\n"
                 judgment_prompt += "3. **[Rule 1: 98% 컷오프 예외 판정]**: \n"
@@ -1307,7 +1307,12 @@ def main():
                 judgment_prompt_tab3 += "  * 단백질: 총(X) -> 단위(Y) (판정)\n"
                 judgment_prompt_tab3 += "  🚨 [경고]: 위 검증 과정에서 '총내용량(X)'이 0이 아닌데 '단위(Y)'가 0으로 표기된 영양소가 단 하나라도 발견되면, 매트릭스 표에서 무조건 🚨부적합 처리하고 사유를 명시하십시오.\n\n"
                 
-                judgment_prompt_tab3 += "🛑 [사칙연산 강제 출력]: 각 영양소별 실측값 vs 표시량 대비 허용오차(80% 하한선, 120% 상한선) 계산식과 결과값도 9대 영양소 모두 누락 없이 작성하십시오.\n"
+                # 🔥 [V5.4 핵심 패치: 상세 사유 작성 시 용량 오차와 % 비율 검증 멘트 무조건 동시 출력 강제]
+                judgment_prompt_tab3 += "🛑 [상세 사유 작성 절대 규칙]: '상세 사유' 칸에는 단순히 '적합함'이라고만 적지 말고, 반드시 아래 2가지 검증 멘트를 무조건 한 세트로 모두 기재하십시오.\n"
+                judgment_prompt_tab3 += "  1) 용량 오차 검증: 실측값 vs 표시량의 허용오차(80% 하한선 또는 120% 상한선) 충족 여부.\n"
+                judgment_prompt_tab3 += "  2) 1일 기준치(%) 검증: 기준치 역산 결과가 시안의 %와 일치하는지 여부 (예: '계산치 12.36%이므로 12% 표기가 올바름'). 단, 기준치가 없는 열량, 트랜스지방 등은 제외.\n"
+                judgment_prompt_tab3 += "  (※ 사칙연산 계산식과 결과값도 9대 영양소 모두 누락 없이 함께 작성하십시오.)\n"
+                
                 if has_any_doc:
                     judgment_prompt_tab3 += "(이곳에 1일 기준치 % 및 성적서 환산치 수학적 계산 과정을 자유롭게 작성하십시오. 기둥 개수에 따라 위 상황 A 또는 B의 0표기 룰을 적용하여 디자이너가 잘못 적은 0이 없는지 철저히 메모하십시오.)\n"
                 else:
