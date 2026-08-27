@@ -12,7 +12,7 @@ import datetime
 # ==========================================
 # [UI 레이아웃 픽스] 반드시 최상단에 위치해야 넓은 화면이 유지됩니다!
 # ==========================================
-st.set_page_config(page_title="식품 QC 마스터", layout="wide")
+st.set_page_config(page_title="Label Guard AI", layout="wide")
 
 import google.generativeai as genai
 
@@ -153,7 +153,7 @@ SYSTEM_PROMPT = f"""당신은 대한민국 최고의 '식품 표시사항 법규
 모든 검토 결과의 결론 앞에는 반드시 ✅(적합) 또는 🚨(부적합) 또는 ⚠️(확인 요망) 기호를 붙이십시오."""
 
 # ==========================================
-# 💡 마스터 룰북 100% 원문 완벽 보존
+# 💡 마스터 룰북 100% 원문 완벽 보존 (Rule 19 덱스트린 로직 강화)
 # ==========================================
 RULE_BOOK_FULL = """
 # [식품 패키지 표시사항 QC 자동화 검수 시스템 룰북]
@@ -238,10 +238,10 @@ RULE_BOOK_FULL = """
    - [영유아 오인 금지]: 일반식품임에도 제품명이나 패키지에 영유아(36개월 미만) 타겟 명칭('아기(아가)', '베이비(베베)', '앙팡', '인펀트', '이유식' 등)이나 젖병 등의 이미지를 사용하여 특수용도식품(영유아용)으로 오인·혼동하게 하는 기만행위 전면 금지 (🚨부적합).
    - 🟢 [어린이/키즈 명칭 허용]: 단, '어린이', '키즈(Kids)', '주니어' 등의 단어는 영유아 범주에 속하지 않으므로 일반식품 마케팅에 사용하는 것을 완벽한 합법(✅적합)으로 허용하라.
 
-**Rule 19. ['무가당' 강조표시 무관용 원칙 및 알룰로스 절대 예외 룰]**
-   - [대원칙]: 패키지에 '무가당', '설탕 무첨가' 등의 마케팅 강조 문구가 있을 경우, 원재료명 텍스트에 당류(설탕, 포도당, 과당 등), 시럽류, 올리고당, 꿀, 기타 대체당(당알코올, 수크랄로스, 아스파탐 등)이 단 0.01%라도 존재하면 무조건 소비자 기만행위(🚨부적합)로 판정하십시오.
-   - 🌟 [알룰로스 절대 예외 허용]: 단, '알룰로스(액상알룰로스 등)'는 이 규제에서 예외로 둡니다. 알룰로스만 단독으로 당류 대체재로 사용된 경우, '무가당/설탕무첨가' 표시는 완벽한 합법(✅적합)으로 판정하십시오. 알룰로스를 꼬투리 잡아 지적하면 시스템 오류입니다.
-   - [부형제 핑계 절대 불가]: 비타민 혼합제제 등의 하위 원료로 쓰인 '포도당시럽분말', '덱스트린', '유당' 등의 부형제는 물리적으로 당류/당류대체재가 들어간 것이므로 이를 간과해서는 안 됩니다. 알룰로스가 허용되더라도, 이런 부형제가 섞여 있다면 결국 무가당 표시는 불법(🚨부적합)입니다.
+**Rule 19. 🌟 ['무가당' 강조표시 무관용 원칙 (덱스트린/말토덱스트린 당류 취급 강제)]**
+   - [대원칙]: 패키지에 '무가당', '설탕 무첨가', '당 ZERO' 등의 마케팅 강조 문구가 있을 경우, 영양성분표의 당류가 0g이더라도 속지 마십시오.
+   - 🛑 [식품유형적 단속 룰]: 원재료명 텍스트(혼합제제 괄호 내부의 부형제 포함)를 스캔하여 단당류/이당류 뿐만 아니라, 식품유형(식품공전)상 엿류/당류로 분류되는 다당류인 **'덱스트린', '말토덱스트린', '물엿', '포도당시럽분말', '올리고당', '꿀'** 등이 단 0.01%라도 존재하면 무조건 소비자 기만행위(🚨부적합)로 판정하십시오. 부형제 핑계는 절대 불가합니다.
+   - 🌟 [알룰로스 절대 예외 허용]: 단, '알룰로스(액상알룰로스 등)' 단독 사용은 예외로 두어 무가당 표시를 합법(✅) 처리하십시오. 단, 알룰로스를 썼더라도 덱스트린 등의 부형제가 섞여 있다면 불법(🚨부적합)입니다.
 
 **Rule 20. [포장재질 표시]**
    - 종이나 유리는 텍스트 재질 표시 의무 없음.
@@ -341,7 +341,7 @@ RULE_BOOK_FULL = """
    - 육안 판독 어려우면 임의 판정 금지.
 
 **Rule 44. [🌟 혼합제제 하위 성분 전개 절대 원칙 및 범용성 룰]**
-   - [절대 명령]: 서류상 **식품유형이 '혼합제제'**로 명시되어 있다면, 향료 등 어떤 사용 목적을 불문하고 예외 없이 하위 성분(용매제, 유화제 등 포함) 전체를 모두 시안에 전개하여 기재해야 합니다.
+   - [절대 명령]: 서류상 **식품유형이 '혼합제제'**로 명시되어 있다면, 향료 등 어떤 사용 목적을 불문하고 예외 없이 하위 성분(용매제, 유화제 등 포함) 전체 시안에 전개하여 기재해야 합니다.
    - [부적합 판정 기준]: 서류가 '혼합제제'인데 시안에 단순히 `향료`, `합성향료(두유향)`과 같이 단일 명칭으로 축약하거나, 하위 성분을 `유화제` 등으로 묶어서 압축했다면 무조건 🚨부적합 처리하십시오. (사유: 혼합제제 내부 성분은 Rule 35 등의 유연성 룰 적용이 불가능하며 100% 개별 전개 필수)
    - 혼합제제는 Rule 5(5% 미만 생략 특례) 및 Rule 2(향료 특례) 적용 대상에서 완전히 배제됩니다.
 
@@ -482,7 +482,7 @@ RULE_BOOK_FULL = """
 
 **Rule 88. [100% 강조표시 기만 검증 룰]**
    - [원재료 100% 금지]: 패키지 시안(주표시면, 기타면 등 전체)에 "OO(원료명) 100%"라고 함량만을 단독으로 강조한 경우, 서류상 배합비에 정제수나 식품첨가물이 단 0.01%라도 존재한다면 무조건 소비자 기만(🚨부적합)으로 판정하십시오. (단, 농축액을 희석한 환원 제품으로서 첨가물을 바로 옆에 명시한 경우는 예외)
-   - [원산지 100% 합법]: 단, "국산 OO 100%" 또는 "특정국가산 OO 100%"처럼 '원산지'를 수식하는 100% 표기는 배합비에 다른 첨가물이나 정제수가 섞여 있어도 완벽한 합법(✅)입니다.
+   - [원산지 100% 합법]: 단, "국산 OO 100%" 또는 "특정국가산 OO 100%"처럼 '원산지'를 수식하는 100% 표기는 배합비에 다른 첨가물이나 정제수가 섞여 있어도 완벽 합법(✅)입니다.
 
 **Rule 89. [국내 제조 가공품 원료의 원산지 이중 표기 규정 (농관원 유권해석)]**
    - [종속성 절대 원칙]: 이 룰은 Rule 28에 따라 원산지 표시 의무가 확정된 [Rank B의 1~3위] 원료에만 발동합니다. 당류가공품, 정제수 등 애초에 면제된 원료에는 절대로 이 룰을 적용하여 부적합 처리하지 마십시오.
@@ -552,7 +552,7 @@ def get_sliced_rules(rule_numbers):
     return "\n\n".join(rules)
 
 # ==========================================
-# 탭별 맞춤형 룰 타겟팅 (1번 탭 Rule 18 완벽 장착)
+# 탭별 맞춤형 룰 타겟팅
 # ==========================================
 TAB1_RULES = [3, 9, 17, 18, 19, 21, 46, 50, 52, 53, 57, 62, 63, 68, 71, 72, 84, 86, 87, 88, 94, 95, 96, 99]
 TAB2_RULES = [1, 2, 4, 5, 8, 9, 12, 13, 14, 16, 28, 29, 30, 34, 35, 38, 39, 44, 45, 47, 48, 51, 53, 54, 60, 61, 64, 65, 70, 85, 89, 90, 91, 95]
@@ -596,68 +596,103 @@ def main():
     st.markdown(print_css, unsafe_allow_html=True)
     
     # ==========================================
-    # 🌟 [발표용 고대비 커스텀 CSS] (추가된 부분)
+    # 🌟 [발표용 고대비 커스텀 CSS - 모던 다크 슬레이트 & 굵은 표 테두리]
     # ==========================================
     custom_theme_css = """
     <style>
     @media screen {
         /* 1. 전체 텍스트 가독성 향상 (완전 검은색으로 대비 높임) */
         html, body, [class*="css"] {
-            color: #111111 !important;
+            color: #1e293b !important;
+            font-family: 'Pretendard', -apple-system, sans-serif !important;
         }
         
         /* 2. 사이드바 배경색을 눌러주고, 메인 화면과 구분되는 굵은 선 추가 */
         [data-testid="stSidebar"] {
-            background-color: #f0f2f6 !important;
-            border-right: 2px solid #a1a1aa !important;
+            background-color: #f8fafc !important;
+            border-right: 1px solid #e2e8f0 !important;
         }
         
-        /* 3. 탭(Tab) 디자인 완전히 분리 및 강조 (폴더 형태로 뚜렷하게) */
+        /* 3. 탭(Tab) 모던 스타일 (깔끔한 밑줄 하이라이트) */
         .stTabs [data-baseweb="tab-list"] {
-            border-bottom: 3px solid #d4d4d8 !important;
-            gap: 4px;
+            border-bottom: 2px solid #e2e8f0 !important;
+            gap: 8px;
         }
         .stTabs [data-baseweb="tab"] {
-            background-color: #f4f4f5;
-            border: 1px solid #d4d4d8 !important;
-            border-bottom: none !important;
-            border-radius: 6px 6px 0 0;
-            padding: 10px 16px !important;
-            color: #52525b !important;
+            background-color: transparent !important;
+            border: none !important;
+            border-bottom: 3px solid transparent !important;
+            border-radius: 0 !important;
+            padding: 12px 16px !important;
+            color: #64748b !important;
             font-weight: 600 !important;
         }
         .stTabs [aria-selected="true"] {
-            background-color: #0056b3 !important; /* 선택된 탭은 진한 파란색 */
-            color: white !important;
-            border: 1px solid #0056b3 !important;
+            border-bottom: 3px solid #0f172a !important; /* 진하고 세련된 네이비/블랙 */
+            color: #0f172a !important;
+            background-color: transparent !important;
         }
         
-        /* 4. 액션 버튼(분석 시작) 명확하고 입체적으로 (시선 집중) */
+        /* 4. 마크다운 표(Table) 고도화 (두꺼운 테두리 및 트렌디한 룩) */
+        table {
+            border-collapse: collapse !important;
+            width: 100% !important;
+            margin: 1.5rem 0 !important;
+            border: 2px solid #0f172a !important; /* 굵은 외곽선 */
+            border-radius: 8px !important;
+            overflow: hidden !important;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1) !important;
+        }
+        thead tr {
+            background-color: #f8fafc !important;
+            color: #0f172a !important;
+            border-bottom: 2px solid #0f172a !important; /* 헤더 아래 굵은 선 */
+        }
+        th {
+            font-weight: 700 !important;
+            padding: 12px 16px !important;
+            text-align: left !important;
+            border-right: 1px solid #cbd5e1 !important;
+        }
+        td {
+            padding: 12px 16px !important;
+            border-right: 1px solid #cbd5e1 !important;
+            border-bottom: 1px solid #e2e8f0 !important;
+        }
+        th:last-child, td:last-child {
+            border-right: none !important;
+        }
+        tbody tr:hover {
+            background-color: #f1f5f9 !important; /* Hover 하이라이트 */
+        }
+        
+        /* 5. 액션 버튼(분석 시작) 명확하고 입체적으로 */
         .stButton>button {
-            background-color: #0056b3 !important;
+            background-color: #0f172a !important; /* 세련된 다크 슬레이트 */
             color: white !important;
-            font-size: 16px !important;
+            font-size: 15px !important;
             font-weight: bold !important;
-            border-radius: 6px !important;
-            border: 2px solid #004085 !important;
-            padding: 10px 24px !important;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.15);
+            border-radius: 8px !important;
+            border: none !important;
+            padding: 12px 24px !important;
+            transition: all 0.2s ease-in-out;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06) !important;
         }
         .stButton>button:hover {
-            background-color: #004085 !important;
-            border-color: #002752 !important;
+            background-color: #334155 !important;
+            transform: translateY(-1px);
         }
         
-        /* 5. 텍스트 입력창 및 파일 업로더 테두리 선명하게 */
+        /* 6. 텍스트 입력창 및 파일 업로더 테두리 선명하게 */
         .stTextInput>div>div>input, .stTextArea>div>div>textarea, .stFileUploader {
-            border: 2px solid #71717a !important;
+            border: 2px solid #cbd5e1 !important;
             border-radius: 6px !important;
             background-color: #ffffff !important;
         }
         
-        /* 6. 가로 구분선(hr) 두껍고 진하게 */
+        /* 7. 가로 구분선(hr) 두껍고 진하게 */
         hr {
-            border-top: 2px solid #a1a1aa !important;
+            border-top: 2px solid #cbd5e1 !important;
             margin: 1.5em 0 !important;
         }
     }
@@ -665,10 +700,10 @@ def main():
     """
     st.markdown(custom_theme_css, unsafe_allow_html=True)
     
-    st.title("식품 표시사항 정밀 검토 시스템 (V4.9.4 Ultimate Master)")
+    st.markdown("<h1>Label Guard AI <span style='font-size:0.5em; color:#64748b;'>식품 패키지 무결점 검증 시스템 (V5.0 Ultimate)</span></h1>", unsafe_allow_html=True)
     
     current_product = st.session_state.get("current_product_name", "지정되지 않음")
-    st.markdown(f"#### **현재 검토 중인 제품:** `{current_product}`")
+    st.markdown(f"#### **현재 타겟 제품:** `{current_product}`")
     st.markdown("<hr class='hide-on-print'>", unsafe_allow_html=True)
 
     with st.sidebar:
@@ -1034,7 +1069,7 @@ def main():
                 judgment_prompt = """<pre_calc>
 ## 1. [사전 연산: 당류 은폐 및 마케팅 팩트체크 추적]
 1. 시안에 '무가당', '설탕 무첨가', '당 ZERO' 등의 마케팅 문구가 존재하는가? [YES / NO]
-2. 원재료명 텍스트 전체(혼합제제 괄호 내부 포함)를 픽셀 단위로 스캔했을 때, '포도당', '시럽', '물엿', '덱스트린', '과당', '설탕' 글자가 단 한 글자라도 존재하는가? [YES / NO]
+2. 원재료명 텍스트 스캔 시 '포도당', '시럽', '물엿', '덱스트린', '말토덱스트린', '과당', '설탕', '올리고당' 등(식품공전 기준 당류/엿류)이 단 한 글자라도 존재하는가? [YES / NO]
 3. 🛑 [제품명 연동 의무 vs 단순 강조 뱃지 분리 알고리즘]
    - 시안의 '제품명' 자체에 특정 원료나 영양성분(예: 고칼슘, 저당 등)이 텍스트로 포함되어 있는가? [YES / NO] 👉 (YES일 경우 주표시면 하단에 해당 함량 명시 필수, 없으면 🚨부적합)
    - 제품명에는 없고 단순히 마케팅 뱃지(디자인)로만 강조(예: 저당, 무가당)되어 있는가? [YES / NO] 👉 (YES일 경우 주표시면에 함량 적을 의무 없음 ✅합법)
@@ -1284,7 +1319,7 @@ def main():
                 judgment_prompt_tab3 += "## [출력 직전 자기 검증 (필수)]\n"
                 judgment_prompt_tab3 += "- 확정한 표 개수(N): [ ]\n"
                 judgment_prompt_tab3 += "- 방금 실제로 렌더링한 마크다운 표 개수: [ ]\n"
-                judgment_prompt_tab3 += "- 두 숫자가 일치하는가? [YES/NO] (NO라면 누락된 단위의 표를 지금 즉시 추가로 렌더링할 것)\n"
+                judgment_prompt_tab3 += "- 두 숫자가 일치하는가? [YES/NO] (NO라면 누락된 단위의 표 단락을 지금 즉시 반복해서 렌더링할 것)\n"
                 judgment_prompt_tab3 += "</pre_calc>\n\n"
 
                 st.session_state["result_tab3"] = run_qc_3pass(tab3_special_rules, judgment_prompt_tab3, missions)
