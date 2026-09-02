@@ -729,7 +729,7 @@ def main():
     """
     st.markdown(custom_theme_css, unsafe_allow_html=True)
     
-    st.markdown("<h1>Label Guard AI <span style='font-size:0.5em; color:#64748b;'>식품 패키지 무결점 검증 시스템 (V5.9.5 Ultimate)</span></h1>", unsafe_allow_html=True)
+    st.markdown("<h1>Label Guard AI <span style='font-size:0.5em; color:#64748b;'>식품 패키지 무결점 검증 시스템 (V5.9.6 Ultimate)</span></h1>", unsafe_allow_html=True)
     
     current_product = st.session_state.get("current_product_name", "지정되지 않음")
     st.markdown(f"#### **현재 타겟 제품:** `{current_product}`")
@@ -1180,7 +1180,11 @@ def main():
                    - [한글라벨/원료 스펙]: 시안에 적힌 원재료의 **'법적 명칭'**과 **'하위 구성 성분'**을 대조할 때는 반드시 **[한글라벨]** 데이터를 기준(정답)으로 삼으십시오.
                 """
 
-                judgment_prompt = "<pre_calc>\n## [사전 연산 1: 원산지 Rank B 및 혼합제제 해체 알고리즘]\n"
+                # 🔥 [V5.9.6 핵심 패치: 사전 연산 필수 수행 강제화]
+                judgment_prompt = "<pre_calc>\n"
+                judgment_prompt += "🛑 [사전 연산 필수 수행]: 아래 '사전 연산 1'과 '사전 연산 2'를 반드시 순서대로 모두 작성하십시오. 생략 시 치명적 오류로 간주합니다.\n\n"
+                
+                judgment_prompt += "## [사전 연산 1: 원산지 Rank B 및 혼합제제 해체 알고리즘]\n"
                 judgment_prompt += "(AI는 아래 5단계를 단답형으로 100% 명확히 작성하여 논리를 확정할 것)\n"
                 judgment_prompt += "1. **[Rank B 제외 대상 필터링]**: [삭제 원료명]\n"
                 judgment_prompt += "2. **[Rank B Top 3 확정]**: (배합비율 없으면 시안 나열 순서대로 강제 추론) 1위: [ ], 2위: [ ], 3위: [ ]\n"
@@ -1204,7 +1208,7 @@ def main():
                 if doc_mode == "개별 한글라벨":
                     if has_any_doc:
                         judgment_prompt += "<pre_calc>\n"
-                        judgment_prompt += "## [사전 연산: 한글라벨 전수 누락 방지 카운팅]\n"
+                        judgment_prompt += "## [사전 연산 3: 한글라벨 전수 누락 방지 카운팅]\n"
                         judgment_prompt += "1. [문서 스캔]: 현재 '원료_한글라벨'로 업로드된 이미지 및 문서의 총 개수는 몇 개입니까? 👉 [ 예: 총 5개 ]\n"
                         judgment_prompt += "2. [원료명 나열]: 각 라벨(서류) 최상단에 적힌 원재료의 제품명을 하나도 빠짐없이 모두 나열하십시오. (특히 향료 3종 등 동종 원료가 여러 개면 전부 적을 것) 👉 [ 예: 곡물향, 호두향, 바닐라향, 덱스트린... ]\n"
                         judgment_prompt += "</pre_calc>\n\n"
