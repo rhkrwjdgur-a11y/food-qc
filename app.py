@@ -416,7 +416,7 @@ RULE_BOOK_FULL = """
    - HACCP 마크 내부의 텍스트가 현재 검토 중인 [제품유형]과 일치하는지 반드시 대조하십시오.
    - [공용 허용]: "안전관리인증" 텍스트는 모든 식품/축산물 유형에서 합법(✅).
    - [일반 식품]: "식품안전관리인증" 텍스트 합법(✅). (축산물에 사용 시 🚨부적합)
-   - [축산물 (냉장 우유, 가공유, 상온 멸균유 등 모두 포함)]: "축산물안전관리인증" 텍스트 합법(✅). 만약 [식품유형]이 축산물(유가공품)인데 마크에 "식품안전관리인증"이라고 적혀 있다면 명백한 규정 위반이므로 🚨부적합 처리하십시오. (멸균 제품이더라도 우유류는 축산물입니다!)
+   - [축산물 (냉장 우유, 가공유, 상온 멸균유 등 모두 포함)]: "축산물안전관리인증" 텍스트 합법(✅). 만약 [식품유형]이 축산물(유가공품)인데 마크에 "식품안전관리인증"이라고 적혀 있다면 명백한 규정 위반이므로 🚨부적합 처리하십시오. (멸균 제품이더라도 우유류는 축산물닙니다!)
 
 **Rule 57. [세트포장 수량 강제 룰]**
    - 박스 번호에 "수량(X입)" 기재 확인.
@@ -800,7 +800,7 @@ def main():
     """
     st.markdown(custom_theme_css, unsafe_allow_html=True)
     
-    st.markdown("<h1>Label Guard AI <span style='font-size:0.5em; color:#64748b;'>식품 패키지 무결점 검증 시스템 (V5.9.21 Ultimate)</span></h1>", unsafe_allow_html=True)
+    st.markdown("<h1>Label Guard AI <span style='font-size:0.5em; color:#64748b;'>식품 패키지 무결점 검증 시스템 (V5.9.22 Ultimate)</span></h1>", unsafe_allow_html=True)
     
     current_product = st.session_state.get("current_product_name", "지정되지 않음")
     st.markdown(f"#### **현재 타겟 제품:** `{current_product}`")
@@ -816,18 +816,6 @@ def main():
 
         product_type = st.radio("식품유형", ("일반식품", "특수의료용도식품", "축산물"), key="product_type")
         inspection_mode = st.radio("검토 모드", ("단품 기본 검토", "선물세트 교차 검토"), key="inspection_mode")
-        
-        # 🔥 [V5.9.22 패치: 선물세트 교차 검토 시 규격 입력을 위한 동적 UI 생성]
-        if inspection_mode == "선물세트 교차 검토":
-            st.markdown("#### 📦 세트포장(외포장) 규격 설정")
-            col1, col2 = st.columns(2)
-            with col1:
-                st.number_input("낱개 용량", value=190.0, step=10.0, key="single_vol")
-                st.number_input("총 입수(개입)", value=24, step=1, key="pack_count")
-            with col2:
-                st.selectbox("용량 단위", ["mL", "g"], key="vol_unit")
-                st.number_input("낱개 열량(kcal)", value=140.0, step=10.0, key="single_kcal")
-
         doc_type = st.radio("증빙 서류 형태", ("통합 엑셀/PDF", "개별 한글라벨"), key="doc_type")
         factory_allergens = st.text_area("공장 알레르기 마스터", "대두, 땅콩, 호두, 잣, 우유, 밀, 복숭아, 토마토, 메밀, 아황산류, 알류", key="factory_allergens")
         
@@ -1383,24 +1371,10 @@ def main():
                     "시험성적서(통합 엑셀 또는 PDF)에서 100g 또는 100mL 당 영양성분 실측치(결과값)를 추출하십시오."
                 ]
                 
-                # 🔥 [V5.9.22 다포장/선물세트 Zone A / Zone B 스캔 특별 지시 추가]
+                # 🔥 [V5.9.22 다포장/선물세트 자동 스캔 및 환산 로직 강화]
                 if "선물세트" in ins_mode:
                     missions.append("[내외포장 1:1 분할 매칭 강제명령]: 타겟(박스) 시안과 비교용(팩) 시안의 영양성분표 수치를 표의 한 칸에 뭉뚱그려 넣지 마십시오. 반드시 각각의 영양성분(열량, 나트륨 등)을 1열씩 1:1로 나란히 매칭되도록 길게 표를 작성하십시오.")
-                    
-                    multipack_vol = st.session_state.get("single_vol", 190.0)
-                    multipack_unit = st.session_state.get("vol_unit", "mL")
-                    multipack_count = st.session_state.get("pack_count", 24)
-                    multipack_kcal = st.session_state.get("single_kcal", 140.0)
-                    
-                    total_vol = multipack_vol * multipack_count
-                    if multipack_unit == "mL" and total_vol >= 1000:
-                        total_str = f"{total_vol/1000:g}L"
-                    elif multipack_unit == "g" and total_vol >= 1000:
-                        total_str = f"{total_vol/1000:g}kg"
-                    else:
-                        total_str = f"{total_vol:g}{multipack_unit}"
-
-                    correct_header = f"총 내용량 {total_str}({multipack_vol:g}{multipack_unit} x {multipack_count}개입) / 1개({multipack_vol:g}{multipack_unit})당 {multipack_kcal:g} kcal"
+                    missions.append("🛑 [다포장 규격 자동 스캔 미션]: 박스(외포장) 시안에서 '개입', '팩', '입', 'T', 'EA', '포' 등의 포장 수량 단서를 찾고, 팩(내포장) 시안에서 낱개 용량(mL/g)과 열량(kcal)을 추출하여 총 내용량 환산 공식을 내부적으로 준비하십시오.")
                 
                 tab3_special_rules = RULES_TAB3 + """
                 \n\n[Tab 3 특별 지시사항 (반드시 지킬 것 - 화면 출력 금지)]
@@ -1416,9 +1390,8 @@ def main():
                     tab3_special_rules += f"""
                 6. 🛑 [🔥 다포장(선물세트) 모드 특별 강제 지시 (Rule 68 적용)]
                    - **[Zone A: 영양정보표 헤더 '총 내용량' 특별 타격]**:
-                     박스(외포장) 시안의 영양정보표 최상단 '총 내용량' 텍스트를 가장 먼저 스캔하십시오.
-                     현재 UI에 입력된 규격에 따른 **법적 정답은 "{correct_header}"** 입니다.
-                     박스 시안에 낱개 용량(예: 총 내용량 {multipack_vol:g}{multipack_unit})이 단품처럼 그대로 복붙되어 있거나 정답 포맷과 다르게 기재되어 있다면 즉시 **🚨부적합** 처리하고, 상세 사유에 정답 포맷으로 수정하라고 강력히 권고하십시오.
+                     박스(외포장) 시안의 전면이나 측면에 스캔된 다포장 단서(예: 24개입 등)와 낱개 용량(예: 190mL)을 곱하여 [총 내용량 환산 정답(예: 4.56L(190mL x 24개입) / 1개(190mL)당 140 kcal)]을 스스로 계산하십시오.
+                     박스 시안의 영양정보표 최상단 '총 내용량' 텍스트를 검증할 때, 낱개 용량이 단품처럼 그대로 복붙되어 있거나 정답 포맷과 다르게 기재되어 있다면 즉시 **🚨부적합** 처리하고, 스스로 계산한 정답 포맷으로 수정하라고 강력히 권고하십시오.
                    - **[Zone B: 9대 영양소 1:1 절대 불변 대조]**:
                      헤더(Zone A) 검증이 끝나면, 그 아래의 9대 영양소 수치(열량, 나트륨 등)는 기존 로직 그대로 **낱팩과 박스의 수치가 1:1로 완벽히 동일한지**(타이포그래피 차이는 합법) 엄격하게 대조하십시오. 절대 이 Zone B의 1:1 대조 로직을 훼손하거나 변형하지 마십시오.
                 """
@@ -1433,7 +1406,13 @@ def main():
                 
                 judgment_prompt_tab3 += "<pre_calc>\n"
                 
-                judgment_prompt_tab3 += f"## 3-{prefix_num} [사전 연산 0: 영양소 나열 순서 범용 팩트체크]\n"
+                if "선물세트" in ins_mode:
+                    judgment_prompt_tab3 += "## [사전 연산 0-1: 다포장 규격 자동 추론 및 환산 (Rule 68)]\n"
+                    judgment_prompt_tab3 += "1. [낱개 규격 스캔]: 팩(내포장) 시안에서 1개당 용량과 열량을 추출하시오. 👉 [ 예: 190mL, 140kcal ]\n"
+                    judgment_prompt_tab3 += "2. [박스 입수 스캔]: 박스(외포장) 시안 전면/측면 등에서 '개입', '팩', '입' 등의 단서를 찾아 총 입수를 추출하시오. 👉 [ 예: 24개입 ]\n"
+                    judgment_prompt_tab3 += "3. [총 내용량 정답 환산]: 위 1번 용량과 2번 입수를 곱하여 박스용 총 내용량 정답 포맷을 조립하시오. 👉 [ 예: 4.56L(190mL x 24개입) / 1개(190mL)당 140 kcal ]\n\n"
+                
+                judgment_prompt_tab3 += f"## 3-{prefix_num} [사전 연산 0-2: 영양소 나열 순서 범용 팩트체크]\n"
                 judgment_prompt_tab3 += "1. [추출]: 시안 이미지(영양성분표)에 나열된 영양소 명칭을 시선 이동 순서대로 모두 적으시오: [ 예: 열량 -> 나트륨 -> 탄수화물 -> 당류 -> ... ]\n"
                 judgment_prompt_tab3 += "2. [마스터 템플릿 대조]: 위 1번에서 추출한 배열이 룰북 1번 항목의 [법정 마스터 순서] 흐름을 완벽히 따르고 있습니까? 특정 영양소가 위계를 벗어나 역행하거나 엉뚱한 위치에 있다면 해당 항목을 명시하십시오. 👉 [ 예: 위반 발견 (식이섬유가 단백질 밑에 있음) / 위반 발견 (나트륨이 지방 밑에 있음) / 위반 없음 ]\n"
                 judgment_prompt_tab3 += "3. [최종 판정]: 표시 순서 위반 사항이 있습니까? 👉 [ YES / NO ]\n\n"
