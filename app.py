@@ -1570,4 +1570,86 @@ def main():
             with st.spinner("AI 법률 엔진 가동 중 (9대 핵심 법령 전문 심층 딥다이브)..."):
                 free_style_prompt = """<pre_calc>
 🚨 [최고 수준 시스템 룰 오버라이드 및 9대 법령 전수 감사 발동]: 
-이 순간부터 당신은 기존에 부여받았던 [식품 QC 마스터 룰북 99개]의 족쇄에서 벗어나, 업로드된 **[9대 핵심 법령 PDF 원문 데이터]**를 무기로 삼아 시안 전체를 픽
+이 순간부터 당신은 기존에 부여받았던 [식품 QC 마스터 룰북 99개]의 족쇄에서 벗어나, 업로드된 **[9대 핵심 법령 PDF 원문 데이터]**를 무기로 삼아 시안 전체를 픽셀 단위로 감사하는 대한민국 최고의 '식품 전문 수석 변호사'입니다.
+어떠한 경우에도 답변에 'Rule OO'이라는 단어를 쓰지 말고, 반드시 실제 법률 조항(예: 「친환경농어업법」 제O조, 「표시기준」 제O조)을 명시하십시오.
+
+🕵‍♂️ [특명: 9대 핵심 법령별 집중 수사 매뉴얼 (Deep-Dive Guidelines)]
+다음 7가지 핵심 맹점을 무조건 100% 교차 검증하십시오:
+1. **[친환경농어업법 70% 컷오프 무관용 적발]**: 
+   - 서류상 유기농 원료의 총 배합비(%)를 반드시 계산하십시오.
+   - 유기농 원료 합계가 70% 미만인 경우, **주표시면(앞면 하단 원료 함량 표시 포함)에 '유기농' 또는 '유기' 단어가 단 한 글자라도 노출되면 명백한 법률 위반(🚨부적합)**으로 즉시 적발하십시오. (오직 뒷면 원재료명 란 내부에서만 표기 허용)
+2. **[숨은 당류 및 무가당 기만 추적]**: '무가당/설탕 무첨가' 강조 시 원재료에 덱스트린, 말토덱스트린, 물엿, 시럽, 올리고당 등 식품유형상 당류/엿류가 포함되었는지 스캔하여 적발하십시오.
+3. **[신체 기능 및 소화 작용 오인 표현]**: "소화불편감을 줄인" 등 인체 효능·기능을 암시하는 문구는 부당광고법 제8조 위반(🚨부적합)으로 강력 제재하십시오.
+4. **[분리배출 도안 및 재질 규정]**: 환경부 고시에 따른 분리배출 도안 마크 및 세부 재질 표시의 적합성을 스캔하십시오.
+5. **[유전자변형(GMO) 및 원산지]**: 'Non-GMO' 오남용 여부 및 농수산물 원산지 표시법 준수 여부를 확인하십시오.
+6. **[어린이 기호식품 및 이력추적]**: 인증 도안 오사용 및 법정 의무 기준을 대조하십시오.
+7. **['N종' 묶음 표기 특례 (유권해석 반영)]**: 일반 복합원재료(당류가공품, 곡류가공품 등)라도 각각 배합비가 5% 미만이면 '당류가공품 2종'처럼 묶어 표기하는 것은 식약처 유권해석상 완벽한 합법입니다. 단, '혼합제제'의 하위 성분들을 '유화제 2종' 등으로 묶는 초분 은폐로 위법(🚨부적합)입니다. 이를 명확히 구별하여 엉뚱한 과잉 단속을 하지 마십시오.
+</pre_calc>
+
+## 5. [AI 법무팀 특별 감사 리포트 (9대 핵심 법령 전문 분석)]
+
+### 챕터 1. 🔍 [패키지 구역별 마케팅·법률 심층 분석]
+- 패키지를 4개 구역(주표시면, 정보표시면, 영양성분표, 기타면)으로 나누어, 발견된 모든 문구 및 디자인에 대해 법률 원문에 근거하여 상세히 브리핑하십시오.
+- 🟢 **[합법/적합 사례]**: 법령에 부합한 우수 사례는 일반적인 글머리기호(-)로 브리핑하십시오.
+- 🛑 **[기만/위법 리스크 적발 시 시각적 강조 강제 룰]**: 친환경농어업법 70% 룰 위반, 신체 기능 오인 문구, 숨은 당류 등 **위법/부적합 리스크를 지적할 때는 절대로 일반 텍스트로 적지 마십시오. 반드시 아래의 HTML 태그 구조를 그대로 사용하여 빨간색 경고 박스가 렌더링되도록 출력**하십시오.
+
+<div style="border: 2px solid #ef4444; background-color: #fef2f2; padding: 15px; border-radius: 8px; margin: 15px 0;">
+    <strong style="color: #ef4444; font-size: 1.1em;">🚨 [위법/부적합 적발]</strong><br>
+    여기에 적발 내용, 위반한 관련 법령 원문, 그리고 상세한 판정 근거를 가차 없이 지적하십시오.
+</div>
+
+### 챕터 2. ⚖️ [리스크 적발 및 법률 위반 사항 총정리]
+- 챕터 1에서 분석한 내용 중 **수정이나 확인이 필요한 법적 리스크(부적합 / 확인요망)**만 빠짐없이 표로 정리하십시오.
+
+| 적발된 리스크 (Risk) | 발견 위치 및 문구 | 관련 법령 원문 및 판정 근거 (상세 사유) | 방어 및 수정 제안 |
+|---|---|---|---|
+
+### 챕터 3. 📜 [최종 법령별 적합성 판정 (9대 핵심 법규 전수 검증)]
+🛑 [절대 명령]: 아래 9대 법령 목록을 단 하나도 누락하거나 생략하지 말고, 1번부터 9번까지 100% 전부 마크다운으로 출력하여 각각의 합격 여부와 1줄 사유를 명시하십시오.
+
+1. **「식품 등의 표시·광고에 관한 법률 및 시행규칙」**: [✅ 적합 / 🚨 부적합 / ⚠️ 확인요망 중 택 1] (사유)
+2. **「식품등의 부당한 표시 또는 광고의 내용 기준」**: [✅ 적합 / 🚨 부적합 / ⚠️ 확인요망 중 택 1] (사유)
+3. **「식품등의 표시기준 고시」**: [✅ 적합 / 🚨 부적합 / ⚠️ 확인요망 중 택 1] (사유)
+4. **「친환경농어업 육성 및 유기식품 등의 관리·지원에 관한 법률 (친환경농어업법)」**: [✅ 적합 / 🚨 부적합 / ⚠️ 확인요망 중 택 1] (※ 유기농 70% 미만 시 앞면 유기농 단어 노출 여부 필수 판정)
+5. **「농수산물의 원산지 표시 등에 관한 법률 시행규칙」**: [✅ 적합 / 🚨 부적합 / ⚠️ 확인요망 중 택 1] (사유)
+6. **「어린이 기호식품 품질인증기준 (식생활안전관리)」**: [✅ 적합 / ⚠️ 해당없음 / 🚨 부적합 중 택 1] (사유)
+7. **「식품 등 이력추적관리기준」**: [✅ 적합 / ⚠️ 해당없음 / 🚨 부적합 중 택 1] (사유)
+8. **「분리배출 표시에 관한 지침 (환경부 고시)」**: [✅ 적합 / 🚨 부적합 / ⚠️ 확인요망 중 택 1] (사유)
+9. **「유전자변형식품등의 표시기준」**: [✅ 적합 / ⚠️ 해당없음 / 🚨 부적합 중 택 1] (사유)
+"""
+                cache_name = st.session_state.get("qc_cache_name")
+                generation_config = genai.types.GenerationConfig(temperature=0.0, max_output_tokens=65536)
+                
+                if cache_name:
+                    try:
+                        cache = genai.caching.CachedContent.get(cache_name)
+                        model = genai.GenerativeModel.from_cached_content(cached_content=cache)
+                        response = model.generate_content([free_style_prompt], generation_config=generation_config)
+                    except:
+                        model = genai.GenerativeModel(MODEL_NAME, system_instruction=SYSTEM_PROMPT)
+                        payload_without_rules = st.session_state["uploaded_content"] + [free_style_prompt]
+                        response = model.generate_content(payload_without_rules, generation_config=generation_config)
+                else:
+                    model = genai.GenerativeModel(MODEL_NAME, system_instruction=SYSTEM_PROMPT)
+                    payload_without_rules = st.session_state["uploaded_content"] + [free_style_prompt]
+                    response = model.generate_content(payload_without_rules, generation_config=generation_config)
+                
+                st.session_state["result_tab5"] = fix_markdown_table(get_safe_text(response))
+        display_result(st.session_state["result_tab5"], "AI법률스캔")
+
+    with tab6:
+        if st.button("종합 결과 요약 리포트 생성", key="btn_summary"):
+            with st.spinner("전체 검토 결과 집계 및 경영진 보고서 작성 중..."):
+                summary_prompt = """## 6. [식품 표시사항 종합 검토 리포트]
+지금까지 분석한 1~5번 탭의 모든 결과를 종합하여, 실무자 및 경영진이 한눈에 파악할 수 있도록 핵심만 요약한 마크다운 리포트를 작성하십시오.
+1. **[총평]**: 전체적인 시안의 법적 안정성 평가 (매우 우수 / 양호 / 주의 / 위험)
+2. **[즉시 수정 필요 (부적합)]**: 과태료나 리콜 대상이 될 수 있는 치명적 위반 사항 요약
+3. **[실무 확인 요망]**: 규정 위반은 아니나, 폰트 크기, 마크 색상, 보수적 표기 안전율 등 인간의 눈으로 최종 확인해야 할 사항
+4. **[모범 준수 사항]**: 디자이너나 실무자가 규정을 아주 훌륭하게 방어해 낸 점 (칭찬 포인트)
+"""
+                st.session_state["result_summary"] = run_qc_model(summary_prompt)
+        display_result(st.session_state["result_summary"], "종합보고서")
+
+if __name__ == "__main__":
+    if check_password():
+        main()
