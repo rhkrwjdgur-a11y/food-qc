@@ -75,8 +75,8 @@ genai.configure(api_key=API_KEY)
 # ==========================================
 # 모델 맵핑
 # ==========================================
-MODEL_NAME = "gemini-1.5-pro" # 3.8-flash 임시 매핑 대체용 (실제 환경에 맞게 조정)
-MODEL_NAME_FLASH = "gemini-1.5-flash"
+MODEL_NAME = "gemini-3.8-flash"
+MODEL_NAME_FLASH = "gemini-3.5-flash-lite"
 
 def get_safe_text(response):
     try:
