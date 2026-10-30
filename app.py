@@ -8,13 +8,12 @@ import socket
 import io
 import json
 import datetime
+import google.generativeai as genai
 
 # ==========================================
 # [UI 레이아웃 픽스] 반드시 최상단에 위치해야 넓은 화면이 유지됩니다!
 # ==========================================
 st.set_page_config(page_title="Label Guard AI", layout="wide")
-
-import google.generativeai as genai
 
 # [네트워크 방어] 파이썬 전체 대기 시간을 10분(600초)으로 연장
 socket.setdefaulttimeout(600)
@@ -76,8 +75,8 @@ genai.configure(api_key=API_KEY)
 # ==========================================
 # 모델 맵핑
 # ==========================================
-MODEL_NAME = "gemini-3.8-flash"
-MODEL_NAME_FLASH = "gemini-3.5-flash-lite"
+MODEL_NAME = "gemini-1.5-pro" # 3.8-flash 임시 매핑 대체용 (실제 환경에 맞게 조정)
+MODEL_NAME_FLASH = "gemini-1.5-flash"
 
 def get_safe_text(response):
     try:
@@ -370,7 +369,7 @@ RULE_BOOK_FULL = """
    - 영양정보표가 좌우 2단(예: 100mL당 / 총 내용량당)으로 병기된 경우, 양쪽 수치가 성적서 대비 각각 올바르게 환산되었는지 이중 교차 검증하십시오.
 
 **Rule 42. [완제품 vs 개별 원료 서류 혼동 및 오적용 방지]**
-   - 여러 장의 서류가 업로드되었을 때, 영양성분 및 최종 배합비의 채점 기준은 반드시 **'최종 완제품'** 서류를 타겟으로 삼아야 합니다. 개별 원료(예: 혼합제제, 과일농축액 등)의 단일 규격서 수치를 완제품 수치로 오인하여 컷오프를 계산하는 치명적 오류를 범하지 마십시오.
+   - 여러 장의 서류가 업로드되었을 때, 영양성분 및 최종 배합비의 채점 기준은 반드시 **'최종 완제품'** 서류 타겟으로 삼아야 합니다. 개별 원료(예: 혼합제제, 과일농축액 등)의 단일 규격서 수치를 완제품 수치로 오인하여 컷오프를 계산하는 치명적 오류를 범하지 마십시오.
 
 **Rule 43. [시각적 한계(해상도)에 따른 환각 판정 절대 금지]**
    - 업로드된 이미지의 해상도가 낮거나, 빛 반사, 왜곡 등으로 인해 텍스트나 수치를 픽셀 단위로 명확히 판독할 수 없다면 절대 문맥을 유추하여 지어내지(환각) 마십시오. 불확실한 구역은 무조건 ⚠️(확인 요망)으로 처리하고, "해상도 저하(또는 빛 반사)로 해당 항목 판독 불가, 원본 시안 파일로 육안 확인 요망"이라고 사유에 명시하십시오.
@@ -809,6 +808,45 @@ def main():
     st.markdown("<hr class='hide-on-print'>", unsafe_allow_html=True)
 
     with st.sidebar:
+        # ==========================================
+        # 🔥 [강화] 법무팀 전용 마스터 캐시 (출근 시 1회)
+        # ==========================================
+        st.markdown("### 👔 [법무 스캔용] 9대 법령 캐싱 (1일 1회)")
+        if st.button("출근용 마스터 법령 캐시 생성"):
+            with st.spinner("default_docs 폴더의 법령을 서버에 적재 중입니다... (최초 1회 약 30초 소요)"):
+                try:
+                    docs_dir = "default_docs"
+                    if not os.path.exists(docs_dir):
+                        st.error(f"'{docs_dir}' 폴더를 찾을 수 없습니다. 깃허브 구조를 확인해주세요.")
+                    else:
+                        law_files = [os.path.join(docs_dir, f) for f in os.listdir(docs_dir) if f.endswith(".pdf")]
+                        if not law_files:
+                            st.warning(f"'{docs_dir}' 폴더에 PDF 파일이 없습니다.")
+                        else:
+                            uploaded_laws = []
+                            for lf in law_files:
+                                up = genai.upload_file(lf)
+                                while up.state.name == "PROCESSING":
+                                    time.sleep(2)
+                                    up = genai.get_file(up.name)
+                                uploaded_laws.append(up)
+                            
+                            # 시스템 프롬프트와 룰북 포함해서 캐시 생성
+                            law_cache_contents = uploaded_laws + [f"\n\n========================================\n[식품 QC 마스터 룰북]\n{RULE_BOOK_FULL}"]
+                            law_cache = genai.caching.CachedContent.create(
+                                model=f"models/{MODEL_NAME}",
+                                display_name="law_qc_cache",
+                                system_instruction=SYSTEM_PROMPT,
+                                contents=law_cache_contents,
+                                ttl=datetime.timedelta(hours=12) # 12시간 유지
+                            )
+                            st.session_state["law_cache_name"] = law_cache.name
+                            st.success("법령 마스터 캐시 적재 완료! (12시간 유지)")
+                except Exception as e:
+                    st.error(f"법령 캐싱 중 오류 발생: {e}")
+
+        st.markdown("---")
+
         st.header("검토 설정 및 파일 업로드")
         
         st.markdown("### 1. 기본 검토 조건")
@@ -1448,7 +1486,7 @@ def main():
                 judgment_prompt_tab3 += "3. [단위/참고량 충족 여부 및 다단 표기 강제 판정] 이 맛(품목)의 1개 단위 내용량(예: 80g)이 100g 미만이고 위 2번에서 찾은 1회 섭취참고량 미만인가? 👉 [YES/NO]\n"
                 judgment_prompt_tab3 += "   🚨 [절대 룰]: 만약 위 3번이 'YES'라면, 식약처 고시에 따라 반드시 **'총 내용량당(예: 320g당)' 영양성분 함량을 병행 표기(다단 표기)** 하여야 합니다. 만약 시안에 '단위내용량당' 1개의 기둥만 단독으로 표시되어 있다면 명백한 표시기준 위반(🚨부적합)으로 판정하고 총 내용량당 기둥을 추가하라고 지시하십시오.\n"
                 judgment_prompt_tab3 += "   🚨 [절대 룰]: 만약 위 3번이 'NO'라면, 즉 단위 내용량이 100g 이상이거나 1회 섭취참고량 이상이라면, 식약처 고시에 따라 '단위 내용량당' 단일 표시가 완벽히 합법입니다.\n"
-                judgment_prompt_tab3 += "4. [최종 레이아웃 판정]: 위 품목별 흐름도 결과에 따라 본 시안의 표기 방식(1개당, 총 내용량당 등 다단 레이아웃)이 고시 규정에 완벽하게 부합하는지 판정 사유를 상세히 적으시오. (특히 농후발효유 80g처럼 둘 다 미달임에도 단일 표기만 한 위반 사례를 날카롭게 적발할 포스)\n\n"
+                judgment_prompt_tab3 += "4. [최종 레이아웃 판정]: 위 품목별 흐름도 결과에 따라 본 시안의 표기 방식(1개당, 총 내용량당 등 다단 레이아웃)이 고시 규정에 완벽하게 부합하는지 판정 사유를 상세히 적으시오. (특히 농후발효유 80g처럼 둘 다 미달임에도 단일 표기만 한 위반 사례를 날카롭게 적발할 것)\n\n"
                 
                 judgment_prompt_tab3 += f"## [사전 연산 2: 다단 표(단위) 기둥 개수 강제 파악]\n"
                 judgment_prompt_tab3 += "[절대 명령]: 시안 영양정보표에 숫자가 적힌 기둥(컬럼)이 몇 개인지 육안으로 스캔하십시오. '1컵당'과 '총 내용량당'처럼 2개의 기둥이 있다면 반드시 각각 분리해서 검증해야 합니다.\n"
@@ -1569,11 +1607,14 @@ def main():
         display_result(st.session_state["result_tab4"], "기타면/측면")
 
     with tab5:
+        # ==========================================
+        # 🔥 [강화] AI 법률 엔진 - 투트랙 캐시(법령 + 제품) 결합 검사
+        # ==========================================
         if st.button("AI 법무팀 자유 스캔 시작", key="btn_law"):
             with st.spinner("AI 법률 엔진 가동 중 (9대 핵심 법령 전문 심층 딥다이브)..."):
                 free_style_prompt = """<pre_calc>
 🚨 [최고 수준 시스템 룰 오버라이드 및 9대 법령 전수 감사 발동]: 
-이 순간부터 당신은 기존에 부여받았던 [식품 QC 마스터 룰북 99개]의 족쇄에서 벗어나, 업로드된 **[9대 핵심 법령 PDF 원문 데이터]**를 무기로 삼아 시안 전체를 픽셀 단위로 감사하는 대한민국 최고의 '식품 전문 수석 변호사'입니다.
+이 순간부터 당신은 기존에 부여받았던 [식품 QC 마스터 룰북 99개]의 족쇄에서 벗어나, 업로드된 **[9대 핵심 법령 PDF 원문 데이터]**를 무기로 삼아 함께 전달된 시안 전체를 픽셀 단위로 감사하는 대한민국 최고의 '식품 전문 수석 변호사'입니다.
 어떠한 경우에도 답변에 'Rule OO'이라는 단어를 쓰지 말고, 반드시 실제 법률 조항(예: 「친환경농어업법」 제O조, 「표시기준」 제O조)을 명시하십시오.
 
 🕵‍♂️ [특명: 9대 핵심 법령별 집중 수사 매뉴얼 (Deep-Dive Guidelines)]
@@ -1620,25 +1661,35 @@ def main():
 8. **「분리배출 표시에 관한 지침 (환경부 고시)」**: [✅ 적합 / 🚨 부적합 / ⚠️ 확인요망 중 택 1] (사유)
 9. **「유전자변형식품등의 표시기준」**: [✅ 적합 / ⚠️ 해당없음 / 🚨 부적합 중 택 1] (사유)
 """
-                cache_name = st.session_state.get("qc_cache_name")
                 generation_config = genai.types.GenerationConfig(temperature=0.0, max_output_tokens=65536)
                 
-                if cache_name:
-                    try:
-                        cache = genai.caching.CachedContent.get(cache_name)
-                        model = genai.GenerativeModel.from_cached_content(cached_content=cache)
-                        response = model.generate_content([free_style_prompt], generation_config=generation_config)
-                    except:
-                        model = genai.GenerativeModel(MODEL_NAME, system_instruction=SYSTEM_PROMPT)
-                        payload_without_rules = st.session_state["uploaded_content"] + [free_style_prompt]
-                        response = model.generate_content(payload_without_rules, generation_config=generation_config)
-                else:
-                    model = genai.GenerativeModel(MODEL_NAME, system_instruction=SYSTEM_PROMPT)
-                    payload_without_rules = st.session_state["uploaded_content"] + [free_style_prompt]
-                    response = model.generate_content(payload_without_rules, generation_config=generation_config)
+                # 1. 아침에 띄워둔 법령 마스터 캐시 가져오기
+                law_cache_name = st.session_state.get("law_cache_name")
+                # 2. 방금 업로드한 개별 제품 시안 데이터(1시간짜리) 가져오기
+                product_content = st.session_state.get("uploaded_content", [])
                 
-                st.session_state["result_tab5"] = fix_markdown_table(get_safe_text(response))
-        display_result(st.session_state["result_tab5"], "AI법률스캔")
+                if not product_content:
+                    st.warning("⚠️ 검토할 제품 시안이 없습니다. 좌측 '전체 시스템 파일 연동 및 캐싱'을 먼저 실행해주세요.")
+                elif law_cache_name:
+                    try:
+                        # 법령 마스터 캐시를 기반으로 모델 인스턴스화
+                        cache = genai.caching.CachedContent.get(law_cache_name)
+                        model = genai.GenerativeModel.from_cached_content(cached_content=cache)
+                        
+                        # 모델(법령 탑재 완료)에게 개별 제품 시안(product_content)을 실시간으로 던져서 검토 지시
+                        payload = product_content + [free_style_prompt]
+                        response = model.generate_content(payload, generation_config=generation_config)
+                        
+                        st.session_state["result_tab5"] = fix_markdown_table(get_safe_text(response))
+                    except Exception as e:
+                        if "403" in str(e) or "404" in str(e):
+                            st.error("🚨 12시간이 경과하여 법령 캐시가 소멸되었습니다. 좌측 사이드바 상단의 **[출근용 마스터 법령 캐시 생성]** 버튼을 다시 눌러주세요.")
+                        else:
+                            st.error(f"법무 스캔 중 오류 발생: {e}")
+                else:
+                    st.warning("⚠️ 법령 캐시가 서버에 없습니다. 좌측 사이드바 상단의 **[출근용 마스터 법령 캐시 생성]** 버튼을 먼저 실행해 주세요.")
+                    
+        display_result(st.session_state.get("result_tab5"), "AI법률스캔")
 
     with tab6:
         if st.button("종합 결과 요약 리포트 생성", key="btn_summary"):
