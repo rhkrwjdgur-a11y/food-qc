@@ -675,13 +675,20 @@ def main():
     current_year = datetime.datetime.now().year
     current_date = datetime.datetime.now().strftime("%Y년 %m월 %d일")
 
+    # 기존 session_state 초기화 코드
     for key in ["result_tab1", "result_tab2", "result_tab3", "result_tab4", "result_tab5", "result_summary", "uploaded_content", "local_file_paths"]:
         if key not in st.session_state:
             st.session_state[key] = None if key != "local_file_paths" else []
 
+    # 🛠️ [개발/테스트 전용] 법령 캐시 강제 주입
+    # 코드를 수정하고 저장해도 법령 10개를 다시 올리지 않게 해줍니다.
+    # 터미널에서 복사한 진짜 캐시 이름을 아래에 붙여넣으세요!
+    st.session_state["law_cache_name"] = "cachedContents/여기에_터미널에서_복사한_주소_붙여넣기"
+
     print_css = """
     <style>
     @media print {
+    # ... 아래로 기존 코드 계속 ...
         [data-testid="stSidebar"], header, footer, [data-testid="stHeader"], [data-testid="stToolbar"],
         .stFileUploader, .stButton, .stRadio, .stTextInput, button { display: none !important; }
         [role="tablist"], [data-baseweb="tab-list"] { display: none !important; }
@@ -844,6 +851,7 @@ def main():
                                 ttl=datetime.timedelta(hours=12) # 12시간 유지
                             )
                             st.session_state["law_cache_name"] = law_cache.name
+                            print("내 법령 캐시 이름:", law_cache.name) # 👈 이 줄을 추가!
                             st.success("법령 마스터 캐시 적재 완료! (12시간 유지)")
                 except Exception as e:
                     st.error(f"법령 캐싱 중 오류 발생: {e}")
