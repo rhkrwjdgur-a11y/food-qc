@@ -75,7 +75,7 @@ genai.configure(api_key=API_KEY)
 # ==========================================
 # 모델 맵핑
 # ==========================================
-MODEL_NAME = "gemini-3.8-pro" # 2.5 라인업으로 가정(3.8 API명에 맞게 조정 가능)
+MODEL_NAME = "gemini-3.8-pro"
 MODEL_NAME_FLASH = "gemini-3.5-flash"
 
 def get_safe_text(response):
