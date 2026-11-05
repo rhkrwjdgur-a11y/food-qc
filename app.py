@@ -332,6 +332,7 @@ RULE_BOOK_FULL = """
    - [2% 미만 예외]: 단, 배합비율이 2% 미만인 원료들은 중량 순서에 상관없이 자유롭게 기재해도 완벽한 합법(✅)입니다.
    - [순서 역전 정밀 검증]: AI는 서류에서 2% 이상인 원료들(예: 1위 35%, 2위 28%, 3위 10.7%, 4위 10.0%...)을 무조건 찾아내어 그 순서가 시안에서 완벽히 동일한지 엄격하게 검증하십시오. (예: 10.7%인 저감미당이 10.0%인 A2단백원유보다 무조건 앞에 와야 합니다. 역전 시 🚨부적합 처리)
    - 🛑 [배합비 미제출 시 실무 알람 강제]: 만약 배합비(%) 서류가 업로드되지 않았다면, 기계적인 🚨부적합 처리는 보류하되 반드시 ⚠️(확인 요망)으로 판정하십시오. 사유 란에 "⚠️ [시스템 알람]: 배합비 서류가 제출되지 않아 원재료 기재 순서(중량순) 및 2% 미만 예외 적용의 적법성을 교차 검증할 수 없습니다. 실무 부서에서 실제 배합비와 시안의 기재 순서가 일치하는지 반드시 한 번 더 확인하시기 바랍니다."라고 강제 출력하십시오.
+   - 🛑 **[괄호 내부 하위 성분 순서 강제 검증 (Deep-Scan 룰)]**: 배합비 중량순 나열 및 2% 미만 예외 룰은 최상위 원료뿐만 아니라, **복합원재료나 혼합제제의 괄호 `( )` 안에 나열된 하위 성분들 사이에도 100% 엄격하게 적용**됩니다. AI는 원료 스펙 서류(한글라벨 등)에 기재된 하위 성분들의 자체 배합 비율을 파악하여, 괄호 내부의 텍스트 나열 순서가 서류의 중량순과 정확히 일치하는지 낱낱이 교차 검증하십시오. 하위 성분 간에 2% 이상임에도 순서가 역전되어 있다면 명백한 표시기준 위반이므로 즉시 🚨부적합 처리하십시오.
 
 **Rule 35. [범용 간략명/관용명 허용 및 'N종' 묶음 표기 절대 합법성 룰]**
    - [관용명/동의어 합법 처리]: 실무적으로 호환되는 동의어나 관용명 표기는 100% 합법(✅). (예: 옥배유=옥수수기름, 액상과당=기타과당=고과당 등)
@@ -691,10 +692,22 @@ def main():
         if key not in st.session_state:
             st.session_state[key] = None if key != "local_file_paths" else []
 
-    # 🛠️ [개발/테스트 전용] 법령 캐시 강제 주입
-    # 코드를 수정하고 저장해도 법령 10개를 다시 올리지 않게 해줍니다.
-    # 터미널에서 복사한 진짜 캐시 이름을 아래에 붙여넣으세요!
-    # st.session_state["law_cache_name"] = "cachedContents/여기에_터미널에서_복사한_주소_붙여넣기"
+    # 🔥 [V5.9.30 패치: 구글 서버 캐시 자동 복구 (새로고침 방어)]
+    # 앱 재시작 시 메모리가 지워져도, 구글 서버에 살아있는 내 캐시를 찾아 자동으로 다시 연결합니다.
+    if "law_cache_name" not in st.session_state:
+        st.session_state["law_cache_name"] = None
+    if "qc_cache_name" not in st.session_state:
+        st.session_state["qc_cache_name"] = None
+        
+    try:
+        # 서버에 현재 존재하는 캐시 목록을 순회하며 내 캐시의 이름표(ID)를 갱신
+        for cache in genai.caching.CachedContent.list():
+            if cache.display_name == "law_qc_cache":
+                st.session_state["law_cache_name"] = cache.name
+            elif cache.display_name == "food_qc_cache":
+                st.session_state["qc_cache_name"] = cache.name
+    except Exception as e:
+        pass
 
     print_css = """
     <style>
@@ -832,6 +845,13 @@ def main():
         # 🔥 [강화] 법무팀 전용 마스터 캐시 (출근 시 1회)
         # ==========================================
         st.markdown("### 👔 [법무 스캔용] 9대 법령 캐싱 (1일 1회)")
+        
+        # 캐시 생존 여부 직관적 표시
+        if st.session_state.get("law_cache_name"):
+            st.success("🟢 법령 마스터 캐시 활성화됨 (자동 복구 완료)")
+        else:
+            st.info("⚪ 법령 마스터 캐시가 없습니다.")
+
         if st.button("출근용 마스터 법령 캐시 생성"):
             with st.spinner("default_docs 폴더의 법령을 서버에 적재 중입니다... (최초 1회 약 30초 소요)"):
                 try:
@@ -861,8 +881,9 @@ def main():
                                 ttl=datetime.timedelta(hours=12) # 12시간 유지
                             )
                             st.session_state["law_cache_name"] = law_cache.name
-                            print("내 법령 캐시 이름:", law_cache.name) # 👈 이 줄을 추가!
+                            print("내 법령 캐시 이름:", law_cache.name)
                             st.success("법령 마스터 캐시 적재 완료! (12시간 유지)")
+                            st.rerun() # UI 업데이트를 위한 강제 새로고침
                 except Exception as e:
                     st.error(f"법령 캐싱 중 오류 발생: {e}")
 
