@@ -73,10 +73,10 @@ else:
 genai.configure(api_key=API_KEY)
 
 # ==========================================
-# 모델 맵핑 (최신 프런티어 라인업 적용)
+# 모델 맵핑 (캐싱 호환 최적화 설정)
 # ==========================================
-MODEL_NAME = "gemini-4-argon"          # 메인 엔진: 법률 검토, 심층 QC 추론, 매트릭스 렌더링용
-MODEL_NAME_FLASH = "gemini-3.8-flash"  # 서브 엔진: 초고속 맞춤법 검사 및 단순 텍스트 정제용
+MODEL_NAME = "gemini-3.8-flash"       # 메인 엔진: 캐싱 지원 및 법령/룰북 심층 QC 연산용
+MODEL_NAME_FLASH = "gemini-3.5-flash-lite" # 서브 엔진: 초고속 맞춤법 검사 및 단순 텍스트 정제용
 
 def get_safe_text(response):
     try:
